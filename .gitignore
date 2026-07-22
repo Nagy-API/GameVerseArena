@@ -1,17 +1,56 @@
+# Visual Studio and other IDE state
 .vs/
-x64/
-Debug/
-Release/
-
-*.exe
-*.obj
-*.pdb
-*.ilk
-*.log
+.idea/
+.vscode/
 *.user
 *.suo
-*.ipch
 *.VC.db
 *.VC.opendb
+*.ipch
+ipch/
+
+# Build output directories
+x64/
+x86/
+Win32/
+Debug/
+Release/
+build/
+out/
+
+# CMake-generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+compile_commands.json
+_deps/
+*.ninja
+.ninja_*
+
+# Compiled binaries and intermediate files
+*.exe
+*.out
+*.app/
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+*.idb
 *.tlog
+*.lastbuildstate
 *.recipe
+
+# Logs, caches, and temporary files
+*.log
+.cache/
+*.tmp
+*.temp
+*.swp
+*~
