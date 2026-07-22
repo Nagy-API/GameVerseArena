@@ -15,21 +15,27 @@ public:
     void update(sf::Time deltaTime) override;
     void render(sf::RenderWindow& window) const override;
     void onResize(sf::Vector2u size) override;
+    void onActivate() override;
 
 private:
     void goBack();
+    void openClassic();
+    void refreshSelection();
 
     SceneManager& sceneManager_;
     sf::Text kicker_;
     sf::Text title_;
     sf::Text subtitle_;
-    sf::RectangleShape boardCard_;
+    UiButton classicCard_;
+    sf::Text classicDetails_;
+    sf::RectangleShape consoleCard_;
     sf::RectangleShape arcadeCard_;
-    sf::Text boardTitle_;
-    sf::Text boardCount_;
-    sf::Text boardDescription_;
+    sf::Text consoleTitle_;
+    sf::Text consoleBadge_;
+    sf::Text consoleDescription_;
     sf::Text arcadeTitle_;
     sf::Text plannedBadge_;
     sf::Text arcadeDescription_;
     UiButton backButton_;
+    std::size_t selectedIndex_{};
 };

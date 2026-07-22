@@ -2,6 +2,7 @@
 
 #include "AssetManager.hpp"
 #include "SceneManager.hpp"
+#include "TicTacToeSession.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -20,4 +21,5 @@ private:
     sf::RenderWindow window_;
     AssetManager assets_;
     SceneManager scenes_;
+    classic_ttt::TicTacToeSession ticTacToeSession_;
 };

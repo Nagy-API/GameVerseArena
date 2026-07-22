@@ -98,6 +98,8 @@ SFML 3.1.0 is approved only for the graphical target. Do not introduce another g
 - Avoid `using namespace std;` in newly created header files.
 - Do not add global mutable state unless clearly justified.
 - Keep game rules separate from presentation and input when creating new code.
+- Keep reusable graphical game rules and AI SFML-independent so they can be tested without opening a window.
+- Graphical game scenes must not modify or directly depend on the matching console game implementation.
 - Do not change old code only to enforce a style preference unless the task is specifically a cleanup task.
 
 ---
@@ -156,6 +158,7 @@ For every implementation task:
 3. Perform a focused smoke test when possible.
 4. Report commands executed and their results.
 5. Clearly separate pre-existing warnings from newly introduced errors.
+6. Add or update automated CTest coverage when shared game rules, sessions, or AI behavior change.
 
 Do not spend the current task fixing all pre-existing warnings unless the prompt explicitly requests warning cleanup.
 

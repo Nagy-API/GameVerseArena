@@ -19,6 +19,11 @@ inline const sf::Color textSecondary{162, 177, 201};
 inline const sf::Color textMuted{112, 128, 154};
 inline const sf::Color border{52, 69, 96};
 inline const sf::Color warning{245, 184, 82};
+inline const sf::Color danger{242, 112, 128};
+inline const sf::Color overlay{5, 9, 18, 220};
+inline const sf::Color markX{103, 166, 255};
+inline const sf::Color markO{80, 211, 181};
+inline const sf::Color winningCell{42, 83, 88};
 
 inline constexpr float pageMargin = 72.f;
 inline constexpr float buttonWidth = 360.f;
@@ -26,6 +31,8 @@ inline constexpr float buttonHeight = 64.f;
 inline constexpr float buttonGap = 14.f;
 inline constexpr float cardRadius = 18.f;
 inline constexpr float animationSpeed = 11.f;
+inline constexpr float boardSize = 390.f;
+inline constexpr float aiThinkingDelay = 0.35f;
 
 inline constexpr unsigned int titleSize = 58;
 inline constexpr unsigned int pageTitleSize = 42;

@@ -3,9 +3,9 @@
 GameVerseArena is a C++17 games platform with two independently buildable applications:
 
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
-- `GameVerseArenaGUI`, a new SFML 3.1.0 graphical launcher shell with a main menu, game-library preview, settings preview, and project information.
+- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, game library, and a complete Classic Tic-Tac-Toe experience.
 
-No game has been migrated to the GUI yet. The GUI does not launch the console games, and Ping Pong remains a planned arcade game rather than a playable feature.
+Classic Tic-Tac-Toe is the first game playable in the GUI. The other 13 board games remain playable in the console application only, and Ping Pong remains a planned arcade game rather than a playable feature.
 
 ## Games
 
@@ -46,6 +46,8 @@ Build either application individually with:
 ```powershell
 cmake --build build --config Release --target GameVerseArena
 cmake --build build --config Release --target GameVerseArenaGUI
+cmake --build build --config Release --target GameVerseArenaTests
+ctest --test-dir build --output-on-failure
 ```
 
 With a Visual Studio multi-configuration generator, the executables are normally at:
@@ -96,3 +98,17 @@ The existing Visual Studio solution and project files remain available for IDE b
 - Press Escape on Game Library, Settings, or About to return to the main menu.
 - Press Escape on the main menu to close the application.
 - Resize the window normally; the 16:9 interface view scales while preserving the layout. The practical design size is 960 x 540 or larger, with a default window size of 1280 x 720 and a 60 FPS frame limit.
+
+## Classic Tic-Tac-Toe in the GUI
+
+Choose **Play**, select **Classic Tic-Tac-Toe**, complete Player Setup, and start the match. The graphical version supports:
+
+- Human vs Human and Human vs Computer.
+- Human choice of X or O; X always opens the round.
+- Easy AI (random legal move), Medium AI (win, block, center, corner priority), and unbeatable Hard AI (alpha-beta Minimax).
+- Single Game, Best of 3, and Best of 5 matches, with draws tracked separately.
+- Next Round, Restart Round, New Match, Rematch, New Setup, and Return to Library flows as appropriate.
+
+Setup is fully keyboard accessible: use Up/Down or Tab to move, Left/Right to change choices, Enter to edit names or activate a control, Backspace to edit, and Escape to go back. During a match, use the arrow keys to select a board cell and Enter or Space to play it. Mouse hover and click are supported throughout. Escape or **Back to Library** opens a confirmation before discarding an active in-memory match.
+
+No player profile, score history, or other game data is persisted between application runs.

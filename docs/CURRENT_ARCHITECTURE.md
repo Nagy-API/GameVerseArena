@@ -8,14 +8,29 @@
 
 ## Graphical shell
 
-`SceneManager` owns the four current scenes and changes the active scene without transferring or exposing ownership. The shell contains:
+`SceneManager` owns the scenes and changes the active scene without transferring or exposing ownership. Its activation callback lets stateful scenes safely initialize transient work such as an AI-turn timer. The shell contains:
 
 - `MainMenuScene`: Play, Settings, About, and Exit navigation with keyboard and mouse input.
-- `GameLibraryScene`: truthful previews of the 14 console board games and planned Ping Pong arcade game.
+- `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe, identifies the other 13 games as console-only, and keeps Ping Pong labeled as planned.
+- `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
+- `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
+- `TicTacToeResultOverlay`: round and match results with next-round, restart, rematch, setup, and library actions.
 - `SettingsScene`: non-functional placeholders for Display, Audio, Controls, and Theme.
 - `AboutScene`: technology and current-milestone information.
 
 `UiButton` provides common bounds, label rendering, hover and selected states, click hit-testing, and delta-time-based visual transitions. `Theme.hpp` centralizes the shell's colors, spacing, type sizes, and animation speed. `AssetManager` loads each required Inter font once, and CMake copies the assets beside the GUI executable.
+
+## Graphical Classic Tic-Tac-Toe module
+
+The first migrated game is isolated under `src/games/classic_tic_tac_toe` and links to the GUI as the `GameVerseArenaTicTacToe` library:
+
+- `TicTacToeBoard` is a pure C++ 3×3 board with legal-move validation, status detection, move count, reset, and winning-line coordinates.
+- `TicTacToeAI` is SFML-independent. Easy chooses a random legal move, Medium uses tactical priorities, and Hard uses depth-aware Minimax with alpha-beta pruning.
+- `TicTacToeSession` owns configuration, current turn, round lifecycle, match score, best-of completion, mark assignment, and duplicate-result protection.
+
+The graphical scenes read and mutate this focused session through its public API. They do not use or modify `Board<T>`, `Move<T>`, `Player<T>`, `GameManager<T>`, or the console `XO_Classes` implementation. This boundary keeps the console game stable while allowing event-driven GUI input and animation.
+
+`GameVerseArenaTests` links only to the pure library and is registered with CTest. It covers board rules, session scoring and lifecycle, all AI levels, and recursive Hard-AI no-loss validation without opening an SFML window.
 
 ## Shared turn-based abstractions
 
@@ -60,7 +75,7 @@ The scoreboard is shared across games during the current application session. It
 ## Current constraints
 
 - The playable board-game user interface and input model remain console-based and synchronous.
-- The graphical application is a navigation shell only; it does not launch or contain any migrated game.
+- Classic Tic-Tac-Toe is the only game currently migrated to the graphical application; the other 13 board games remain console-only.
 - Settings are labeled previews and do not persist or change application behavior.
 - Ping Pong is displayed only as planned and has not been implemented.
 - The shared framework assumes two players taking discrete, alternating turns.

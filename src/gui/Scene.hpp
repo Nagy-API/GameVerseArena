@@ -12,4 +12,5 @@ public:
     virtual void update(sf::Time deltaTime) = 0;
     virtual void render(sf::RenderWindow& window) const = 0;
     virtual void onResize(sf::Vector2u size) = 0;
+    virtual void onActivate() {}
 };

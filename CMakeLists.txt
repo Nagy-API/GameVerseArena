@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.28)
 
 project(GameVerseArena LANGUAGES CXX)
 
+enable_testing()
+
 include(FetchContent)
 
 set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
@@ -58,7 +60,30 @@ add_executable(GameVerseArenaGUI
     "src/gui/SettingsScene.cpp"
     "src/gui/AboutScene.cpp"
     "src/gui/UiButton.cpp"
+    "src/gui/TicTacToeSetupScene.cpp"
+    "src/gui/TicTacToeGameScene.cpp"
+    "src/gui/TicTacToeResultOverlay.cpp"
 )
+
+add_library(GameVerseArenaTicTacToe
+    "src/games/classic_tic_tac_toe/TicTacToeBoard.cpp"
+    "src/games/classic_tic_tac_toe/TicTacToeAI.cpp"
+    "src/games/classic_tic_tac_toe/TicTacToeSession.cpp"
+)
+
+target_include_directories(GameVerseArenaTicTacToe PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/classic_tic_tac_toe"
+)
+
+target_compile_features(GameVerseArenaTicTacToe PUBLIC cxx_std_17)
+
+add_executable(GameVerseArenaTests
+    "tests/TicTacToeTests.cpp"
+)
+
+target_link_libraries(GameVerseArenaTests PRIVATE GameVerseArenaTicTacToe)
+target_compile_features(GameVerseArenaTests PRIVATE cxx_std_17)
+add_test(NAME ClassicTicTacToeTests COMMAND GameVerseArenaTests)
 
 set_target_properties(GameVerseArenaGUI PROPERTIES
     CXX_STANDARD 17
@@ -73,7 +98,7 @@ if(WIN32)
     endif()
 endif()
 
-target_link_libraries(GameVerseArenaGUI PRIVATE SFML::Graphics)
+target_link_libraries(GameVerseArenaGUI PRIVATE GameVerseArenaTicTacToe SFML::Graphics)
 
 add_custom_command(TARGET GameVerseArenaGUI POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_directory

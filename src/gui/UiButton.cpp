@@ -36,6 +36,12 @@ void UiButton::setPosition(sf::Vector2f position)
     centerLabel();
 }
 
+void UiButton::setText(std::string text)
+{
+    label_.setString(std::move(text));
+    centerLabel();
+}
+
 bool UiButton::contains(sf::Vector2f point) const
 {
     return background_.getGlobalBounds().contains(point);

@@ -5,6 +5,8 @@
 #include "MainMenuScene.hpp"
 #include "SettingsScene.hpp"
 #include "Theme.hpp"
+#include "TicTacToeGameScene.hpp"
+#include "TicTacToeSetupScene.hpp"
 
 #include <SFML/Graphics/View.hpp>
 #include <SFML/System/Clock.hpp>
@@ -81,6 +83,10 @@ bool Application::initialize()
         assets_.regularFont(), assets_.semiboldFont(), scenes_, window_));
     scenes_.add(SceneId::GameLibrary, std::make_unique<GameLibraryScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_));
+    scenes_.add(SceneId::TicTacToeSetup, std::make_unique<TicTacToeSetupScene>(
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_));
+    scenes_.add(SceneId::TicTacToeGame, std::make_unique<TicTacToeGameScene>(
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_));
     scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_));
     scenes_.add(SceneId::About, std::make_unique<AboutScene>(

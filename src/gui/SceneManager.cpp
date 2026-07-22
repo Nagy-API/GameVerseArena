@@ -23,6 +23,7 @@ void SceneManager::switchTo(SceneId id)
         throw std::logic_error("Requested scene has not been registered");
     }
     activeId_ = id;
+    scenes_[indexOf(activeId_)]->onActivate();
 }
 
 Scene& SceneManager::active()

@@ -14,6 +14,7 @@ public:
     UiButton(const sf::Font& font, std::string text, sf::Vector2f size);
 
     void setPosition(sf::Vector2f position);
+    void setText(std::string text);
     void setHovered(bool hovered) noexcept { hovered_ = hovered; }
     void setSelected(bool selected) noexcept { selected_ = selected; }
 
