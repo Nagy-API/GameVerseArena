@@ -30,13 +30,17 @@ Use the repository's current name. Do not rename or rebrand the project unless t
 ## Current Baseline
 
 - Language: C++17
-- Current UI: console
-- Current entry point: `XO_Demo.cpp`
+- Current playable UI: console
+- Console entry point: `XO_Demo.cpp`
+- Graphical shell entry point: `src/gui/main.cpp`
+- Approved GUI dependency: SFML 3.1.0 through CMake FetchContent
 - Shared board-game abstractions: `BoardGame_Classes.h`
 - Existing Visual Studio project files are present.
 - The existing application, game rules, computer-player behavior, player setup, and scoreboard must remain functional unless a task explicitly changes them.
 
 The current board-game framework is designed for turn-based games. Do not force future real-time games such as Ping Pong into `Board<T>`, `Move<T>`, or the existing turn-based `GameManager<T>`.
+
+The `GameVerseArena` console target and all 14 existing games must remain preserved. New graphical code must use SFML 3 APIs. Do not silently merge console presentation or turn-based game logic into GUI scenes.
 
 ---
 
@@ -79,7 +83,7 @@ Board-game-specific concepts such as `Board<T>`, `Move<T>`, and turn order must 
 
 Real-time concepts such as frame updates, delta time, continuous input, physics, and collision detection must stay inside the real-time layer.
 
-Do not introduce SFML, another graphics framework, SQLite, JSON libraries, or any external dependency unless the current task explicitly requests it.
+SFML 3.1.0 is approved only for the graphical target. Do not introduce another graphics framework, SQLite, JSON libraries, or any other external dependency unless the current task explicitly requests it.
 
 ---
 

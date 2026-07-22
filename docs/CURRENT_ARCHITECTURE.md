@@ -1,8 +1,21 @@
 # Current Architecture
 
-## Application entry point
+## Application entry points
 
-`XO_Demo.cpp` contains `main()` and the current console application shell. It initializes the process-wide random number generator, collects the two players' names and Human/Computer types, displays the main and game-selection menus, starts the selected game, detects its result, and updates the session scoreboard.
+`XO_Demo.cpp` contains `main()` for the existing `GameVerseArena` console application. It initializes the process-wide random number generator, collects the two players' names and Human/Computer types, displays the main and game-selection menus, starts the selected game, detects its result, and updates the session scoreboard.
+
+`src/gui/main.cpp` contains `main()` for the separate `GameVerseArenaGUI` executable. `Application` owns the SFML 3.1.0 window, runtime asset manager, responsive view, event/update/render loop, and scene manager. The GUI runs at a 1280 x 720 logical size with a 60 FPS limit and clamps long frame times before updating animations.
+
+## Graphical shell
+
+`SceneManager` owns the four current scenes and changes the active scene without transferring or exposing ownership. The shell contains:
+
+- `MainMenuScene`: Play, Settings, About, and Exit navigation with keyboard and mouse input.
+- `GameLibraryScene`: truthful previews of the 14 console board games and planned Ping Pong arcade game.
+- `SettingsScene`: non-functional placeholders for Display, Audio, Controls, and Theme.
+- `AboutScene`: technology and current-milestone information.
+
+`UiButton` provides common bounds, label rendering, hover and selected states, click hit-testing, and delta-time-based visual transitions. `Theme.hpp` centralizes the shell's colors, spacing, type sizes, and animation speed. `AssetManager` loads each required Inter font once, and CMake copies the assets beside the GUI executable.
 
 ## Shared turn-based abstractions
 
@@ -46,10 +59,15 @@ The scoreboard is shared across games during the current application session. It
 
 ## Current constraints
 
-- The user interface and input model are console-based and synchronous.
+- The playable board-game user interface and input model remain console-based and synchronous.
+- The graphical application is a navigation shell only; it does not launch or contain any migrated game.
+- Settings are labeled previews and do not persist or change application behavior.
+- Ping Pong is displayed only as planned and has not been implemented.
 - The shared framework assumes two players taking discrete, alternating turns.
 - Game completion is expressed through `Board<T>` win, loss, and draw queries.
 - Individual modules contain their existing rule, presentation, input, and computer-player behavior; these have not been reorganized.
 - Word Tic-Tac-Toe depends on `dic.txt` being available in the process working directory. The CMake build places a copy beside the executable.
 
 This framework is specifically a turn-based board-game layer. A real-time game has different needs, including frame updates, delta time, continuous input, physics, and collision detection. Real-time games must not be forced into `Board<T>`, `Move<T>`, or the existing `GameManager<T>` loop.
+
+The SFML scene layer is currently independent of the console framework. Future tasks must use an explicit integration boundary rather than moving console presentation, `Board<T>`, or `GameManager<T>` directly into GUI scenes.
