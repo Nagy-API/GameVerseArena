@@ -13,11 +13,11 @@ AboutScene::AboutScene(const sf::Font& regularFont,
       title_(semiboldFont, "GameVerseArena", Theme::pageTitleSize),
       detailsCard_({1136.f, 340.f}),
       technology_(semiboldFont, "C++17  |  SFML 3.1.0", 22),
-      milestone_(semiboldFont, "GRAPHICAL SHELL MILESTONE", Theme::labelSize),
+      milestone_(semiboldFont, "TURN-BASED + REAL-TIME", Theme::labelSize),
       description_(regularFont,
-                   "This milestone introduces a polished graphical launcher and a scene-based foundation.\n"
-                   "The 14 board games remain fully available in the separate console application; no game\n"
-                   "has been migrated to the graphical interface yet.",
+                   "Classic Tic-Tac-Toe and Ping Pong now demonstrate two distinct graphical game loops.\n"
+                   "All 14 original board games remain fully available in the separate console application;\n"
+                   "the other 13 board games are still awaiting graphical migration.",
                    Theme::bodySize),
       backButton_(semiboldFont, "Back", {170.f, 54.f})
 {

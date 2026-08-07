@@ -20,6 +20,7 @@ public:
 private:
     void goBack();
     void openClassic();
+    void openPingPong();
     void refreshSelection();
 
     SceneManager& sceneManager_;
@@ -29,13 +30,11 @@ private:
     UiButton classicCard_;
     sf::Text classicDetails_;
     sf::RectangleShape consoleCard_;
-    sf::RectangleShape arcadeCard_;
+    UiButton pingPongCard_;
+    sf::Text pingPongDetails_;
     sf::Text consoleTitle_;
     sf::Text consoleBadge_;
     sf::Text consoleDescription_;
-    sf::Text arcadeTitle_;
-    sf::Text plannedBadge_;
-    sf::Text arcadeDescription_;
     UiButton backButton_;
     std::size_t selectedIndex_{};
 };

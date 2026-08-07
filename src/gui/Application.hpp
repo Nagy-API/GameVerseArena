@@ -3,6 +3,7 @@
 #include "AssetManager.hpp"
 #include "SceneManager.hpp"
 #include "TicTacToeSession.hpp"
+#include "PingPongSession.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -22,4 +23,5 @@ private:
     AssetManager assets_;
     SceneManager scenes_;
     classic_ttt::TicTacToeSession ticTacToeSession_;
+    ping_pong::PingPongSession pingPongSession_;
 };

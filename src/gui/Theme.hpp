@@ -24,6 +24,11 @@ inline const sf::Color overlay{5, 9, 18, 220};
 inline const sf::Color markX{103, 166, 255};
 inline const sf::Color markO{80, 211, 181};
 inline const sf::Color winningCell{42, 83, 88};
+inline const sf::Color arcadeLeft{103, 166, 255};
+inline const sf::Color arcadeRight{80, 211, 181};
+inline const sf::Color playfield{13, 23, 39};
+inline const sf::Color divider{69, 87, 116, 150};
+inline const sf::Color ballGlow{235, 245, 255, 54};
 
 inline constexpr float pageMargin = 72.f;
 inline constexpr float buttonWidth = 360.f;

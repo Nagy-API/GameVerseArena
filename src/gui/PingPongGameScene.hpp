@@ -1,0 +1,64 @@
+#pragma once
+
+#include "PingPongAI.hpp"
+#include "PingPongPauseOverlay.hpp"
+#include "PingPongResultOverlay.hpp"
+#include "PingPongSession.hpp"
+#include "PingPongSimulation.hpp"
+#include "Scene.hpp"
+#include "SceneManager.hpp"
+#include "UiButton.hpp"
+
+#include <SFML/Graphics/Text.hpp>
+#include <SFML/Window/Keyboard.hpp>
+
+#include <deque>
+
+class PingPongGameScene final : public Scene {
+public:
+    PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
+                      SceneManager& sceneManager, ping_pong::PingPongSession& session);
+
+    void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
+    void update(sf::Time deltaTime) override;
+    void render(sf::RenderWindow& window) const override;
+    void onResize(sf::Vector2u size) override;
+    void onActivate() override;
+
+private:
+    struct HeldInput {
+        bool w{};
+        bool s{};
+        bool up{};
+        bool down{};
+    };
+
+    void setKey(sf::Keyboard::Key key, bool held);
+    void clearHeldInput() noexcept;
+    ping_pong::Movement direction(bool up, bool down) const noexcept;
+    ping_pong::ControlInput controlsForStep(double seconds);
+    void setPaused(bool paused);
+    void restartMatch();
+    void handlePauseAction(PingPongPauseAction action);
+    void handleResultAction(PingPongResultAction action);
+    void drawPlayfield(sf::RenderTarget& target) const;
+    void drawCentered(sf::RenderTarget& target, const std::string& value, sf::Vector2f center,
+                      unsigned int size, const sf::Color& color, bool strong = false) const;
+
+    static constexpr double fixedStep = 1.0 / 120.0;
+    static constexpr int maximumCatchUpSteps = 8;
+
+    SceneManager& sceneManager_;
+    ping_pong::PingPongSession& session_;
+    ping_pong::PingPongSimulation simulation_;
+    ping_pong::PingPongAI ai_;
+    const sf::Font& regularFont_;
+    const sf::Font& semiboldFont_;
+    UiButton pauseButton_;
+    PingPongPauseOverlay pauseOverlay_;
+    PingPongResultOverlay resultOverlay_;
+    HeldInput held_{};
+    std::deque<ping_pong::Vec2> trail_;
+    double accumulator_{};
+    bool paused_{false};
+};

@@ -18,6 +18,13 @@ FetchContent_Declare(SFML
 )
 FetchContent_MakeAvailable(SFML)
 
+# SFML 3.1.0 enables Freetype unity builds, which trigger third-party macro
+# collisions with current MinGW/GNU 15. Keep the dependency pinned and build
+# its original translation units separately.
+if(TARGET freetype)
+    set_target_properties(freetype PROPERTIES UNITY_BUILD OFF)
+endif()
+
 add_executable(GameVerseArena
     "5x5 Tic Tac Toe.cpp"
     "Diamond.cpp"
@@ -63,6 +70,10 @@ add_executable(GameVerseArenaGUI
     "src/gui/TicTacToeSetupScene.cpp"
     "src/gui/TicTacToeGameScene.cpp"
     "src/gui/TicTacToeResultOverlay.cpp"
+    "src/gui/PingPongSetupScene.cpp"
+    "src/gui/PingPongGameScene.cpp"
+    "src/gui/PingPongPauseOverlay.cpp"
+    "src/gui/PingPongResultOverlay.cpp"
 )
 
 add_library(GameVerseArenaTicTacToe
@@ -85,6 +96,26 @@ target_link_libraries(GameVerseArenaTests PRIVATE GameVerseArenaTicTacToe)
 target_compile_features(GameVerseArenaTests PRIVATE cxx_std_17)
 add_test(NAME ClassicTicTacToeTests COMMAND GameVerseArenaTests)
 
+add_library(GameVerseArenaPingPong
+    "src/games/ping_pong/PingPongSimulation.cpp"
+    "src/games/ping_pong/PingPongAI.cpp"
+    "src/games/ping_pong/PingPongSession.cpp"
+)
+
+target_include_directories(GameVerseArenaPingPong PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/ping_pong"
+)
+
+target_compile_features(GameVerseArenaPingPong PUBLIC cxx_std_17)
+
+add_executable(GameVerseArenaPingPongTests
+    "tests/PingPongTests.cpp"
+)
+
+target_link_libraries(GameVerseArenaPingPongTests PRIVATE GameVerseArenaPingPong)
+target_compile_features(GameVerseArenaPingPongTests PRIVATE cxx_std_17)
+add_test(NAME PingPongTests COMMAND GameVerseArenaPingPongTests)
+
 set_target_properties(GameVerseArenaGUI PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
@@ -98,7 +129,7 @@ if(WIN32)
     endif()
 endif()
 
-target_link_libraries(GameVerseArenaGUI PRIVATE GameVerseArenaTicTacToe SFML::Graphics)
+target_link_libraries(GameVerseArenaGUI PRIVATE GameVerseArenaTicTacToe GameVerseArenaPingPong SFML::Graphics)
 
 add_custom_command(TARGET GameVerseArenaGUI POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_directory

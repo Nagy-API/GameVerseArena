@@ -3,9 +3,9 @@
 GameVerseArena is a C++17 games platform with two independently buildable applications:
 
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
-- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, game library, and a complete Classic Tic-Tac-Toe experience.
+- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
 
-Classic Tic-Tac-Toe is the first game playable in the GUI. The other 13 board games remain playable in the console application only, and Ping Pong remains a planned arcade game rather than a playable feature.
+Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
 ## Games
 
@@ -47,6 +47,7 @@ Build either application individually with:
 cmake --build build --config Release --target GameVerseArena
 cmake --build build --config Release --target GameVerseArenaGUI
 cmake --build build --config Release --target GameVerseArenaTests
+cmake --build build --config Release --target GameVerseArenaPingPongTests
 ctest --test-dir build --output-on-failure
 ```
 
@@ -112,3 +113,19 @@ Choose **Play**, select **Classic Tic-Tac-Toe**, complete Player Setup, and star
 Setup is fully keyboard accessible: use Up/Down or Tab to move, Left/Right to change choices, Enter to edit names or activate a control, Backspace to edit, and Escape to go back. During a match, use the arrow keys to select a board cell and Enter or Space to play it. Mouse hover and click are supported throughout. Escape or **Back to Library** opens a confirmation before discarding an active in-memory match.
 
 No player profile, score history, or other game data is persisted between application runs.
+
+## Ping Pong in the GUI
+
+Choose **Play**, select **Ping Pong** under Arcade Games, configure the match, and select **Start Match**. Every match is first to 5 points with no win-by-two rule.
+
+- Human vs Human: W/S controls the left paddle and Up/Down controls the right paddle.
+- Human vs Computer: the human controls the left paddle with either W/S or Up/Down.
+- Easy AI reacts every 190 ms, moves at 68% paddle speed, follows the current ball position, and uses broad aiming error.
+- Medium AI reacts every 105 ms, moves at 84% speed, predicts the intercept including wall reflections, and uses moderate error.
+- Hard AI reacts every 52 ms, uses the full legal paddle speed, predicts reflected intercepts, and uses small controlled error.
+
+The ball starts at 470 logical pixels per second. Each successful paddle contact increases its speed by 4%, capped at 900, and every point resets it to base speed. After a point, play freezes briefly, the scorer is shown, the paddles and ball reset, and a three-second serve countdown begins.
+
+Press Escape or select **Pause** to stop physics, AI timers, and the serve clock. The pause menu provides Resume, Restart Match, New Setup, and Return to Library. Losing window focus clears held movement and opens the pause overlay. The winner overlay provides Rematch, New Setup, and Return to Library.
+
+Ping Pong physics run at a fixed 1/120-second step independently of rendering. The pure Ping Pong tests do not create a window or link SFML.

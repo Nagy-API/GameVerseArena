@@ -4,17 +4,21 @@
 
 `XO_Demo.cpp` contains `main()` for the existing `GameVerseArena` console application. It initializes the process-wide random number generator, collects the two players' names and Human/Computer types, displays the main and game-selection menus, starts the selected game, detects its result, and updates the session scoreboard.
 
-`src/gui/main.cpp` contains `main()` for the separate `GameVerseArenaGUI` executable. `Application` owns the SFML 3.1.0 window, runtime asset manager, responsive view, event/update/render loop, and scene manager. The GUI runs at a 1280 x 720 logical size with a 60 FPS limit and clamps long frame times before updating animations.
+`src/gui/main.cpp` contains `main()` for the separate `GameVerseArenaGUI` executable. `Application` owns the SFML 3.1.0 window, runtime asset manager, responsive view, event/update/render loop, and scene manager. The GUI runs at a 1280 x 720 logical size with a 60 FPS limit and clamps long frame times before updating animations. Ping Pong performs its own fixed-step accumulation inside its game scene.
 
 ## Graphical shell
 
 `SceneManager` owns the scenes and changes the active scene without transferring or exposing ownership. Its activation callback lets stateful scenes safely initialize transient work such as an AI-turn timer. The shell contains:
 
 - `MainMenuScene`: Play, Settings, About, and Exit navigation with keyboard and mouse input.
-- `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe, identifies the other 13 games as console-only, and keeps Ping Pong labeled as planned.
+- `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe and Ping Pong while truthfully identifying the other 13 board games as console-only.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
 - `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
 - `TicTacToeResultOverlay`: round and match results with next-round, restart, rematch, setup, and library actions.
+- `PingPongSetupScene`: local/AI mode, player names, and Easy/Medium/Hard configuration with keyboard and mouse input.
+- `PingPongGameScene`: held controls, fixed-timestep simulation, score and arena rendering, focus-loss safety, and scene navigation.
+- `PingPongPauseOverlay`: Resume, Restart Match, New Setup, and Return to Library actions while all real-time state is stopped.
+- `PingPongResultOverlay`: winner, final score, Rematch, New Setup, and Return to Library actions.
 - `SettingsScene`: non-functional placeholders for Display, Audio, Controls, and Theme.
 - `AboutScene`: technology and current-milestone information.
 
@@ -31,6 +35,21 @@ The first migrated game is isolated under `src/games/classic_tic_tac_toe` and li
 The graphical scenes read and mutate this focused session through its public API. They do not use or modify `Board<T>`, `Move<T>`, `Player<T>`, `GameManager<T>`, or the console `XO_Classes` implementation. This boundary keeps the console game stable while allowing event-driven GUI input and animation.
 
 `GameVerseArenaTests` links only to the pure library and is registered with CTest. It covers board rules, session scoring and lifecycle, all AI levels, and recursive Hard-AI no-loss validation without opening an SFML window.
+
+## Graphical Ping Pong module
+
+Ping Pong is isolated under `src/games/ping_pong` and links to the GUI as the SFML-independent `GameVerseArenaPingPong` library:
+
+- `PingPongTypes` defines focused numeric vectors, field/paddle/ball state, controls, modes, difficulty, score, and match lifecycle without SFML types.
+- `PingPongSimulation` owns deterministic paddle movement, ball integration, wall/paddle collisions, impact-angle response, rally acceleration, and one-shot scoring. It uses a 1280 x 720 logical coordinate system with a 1140 x 500 playfield, 470 base ball speed, 4% contact growth, and a 900 speed cap.
+- `PingPongAI` returns only a movement intention and a legal speed scale. Easy follows the current ball with delay and error; Medium and Hard predict the right-paddle intercept with reflected top/bottom travel. Production RNG is seeded once, while tests can inject a seed.
+- `PingPongSession` owns trimmed names, mode, AI difficulty, the 0-0 score, first-to-5 winner detection, duplicate-point protection, point pause, three-second serve countdown, and rematch configuration preservation.
+
+`PingPongGameScene` accumulates render delta time and advances physics at 1/120 second. It clamps its accepted frame delta to 100 ms, processes at most eight catch-up steps, and discards excess backlog to avoid a spiral after dragging, focus changes, or a debugger stall. Pausing prevents simulation, AI reaction timers, and point/serve timers from updating. Focus loss clears all held keys and pauses; focus gain requires fresh input and does not resume automatically.
+
+`GameVerseArenaPingPongTests` links only the pure Ping Pong library. It verifies simulation initialization, clamping, collisions, impact angles, scoring, speed growth/cap/reset, determinism, session lifecycle, all legal AI intentions, deterministic AI seeding, and a reflected Hard-AI intercept without opening an SFML window.
+
+The Tic-Tac-Toe path remains event-driven and turn-based: discrete moves update a board/session model and AI chooses a discrete cell. Ping Pong instead consumes continuous control intentions and advances numeric state through fixed real-time steps. Neither graphical game depends on the console implementation, and Ping Pong is not forced into `Board<T>`, `Move<T>`, `Player<T>`, or `GameManager<T>`.
 
 ## Shared turn-based abstractions
 
@@ -75,9 +94,9 @@ The scoreboard is shared across games during the current application session. It
 ## Current constraints
 
 - The playable board-game user interface and input model remain console-based and synchronous.
-- Classic Tic-Tac-Toe is the only game currently migrated to the graphical application; the other 13 board games remain console-only.
+- Classic Tic-Tac-Toe is the graphical turn-based game, Ping Pong is the only graphical arcade game, and the other 13 board games remain console-only.
 - Settings are labeled previews and do not persist or change application behavior.
-- Ping Pong is displayed only as planned and has not been implemented.
+- Ping Pong currently supports local two-player and local Human-vs-Computer play only; it has no audio, controller support, networking, or persistent match history.
 - The shared framework assumes two players taking discrete, alternating turns.
 - Game completion is expressed through `Board<T>` win, loss, and draw queries.
 - Individual modules contain their existing rule, presentation, input, and computer-player behavior; these have not been reorganized.

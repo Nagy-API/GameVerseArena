@@ -7,6 +7,8 @@
 #include "Theme.hpp"
 #include "TicTacToeGameScene.hpp"
 #include "TicTacToeSetupScene.hpp"
+#include "PingPongGameScene.hpp"
+#include "PingPongSetupScene.hpp"
 
 #include <SFML/Graphics/View.hpp>
 #include <SFML/System/Clock.hpp>
@@ -87,6 +89,10 @@ bool Application::initialize()
         assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_));
     scenes_.add(SceneId::TicTacToeGame, std::make_unique<TicTacToeGameScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_));
+    scenes_.add(SceneId::PingPongSetup, std::make_unique<PingPongSetupScene>(
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_));
+    scenes_.add(SceneId::PingPongGame, std::make_unique<PingPongGameScene>(
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_));
     scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_));
     scenes_.add(SceneId::About, std::make_unique<AboutScene>(

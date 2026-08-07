@@ -83,6 +83,8 @@ Board-game-specific concepts such as `Board<T>`, `Move<T>`, and turn order must 
 
 Real-time concepts such as frame updates, delta time, continuous input, physics, and collision detection must stay inside the real-time layer.
 
+Reusable real-time simulation must remain independent from rendering and framework-specific vector/rectangle types. Prefer a fixed timestep for deterministic real-time physics, clamp stalled frame time, and cap catch-up work. Continuous input must be cleared on application focus loss so hidden movement cannot continue.
+
 SFML 3.1.0 is approved only for the graphical target. Do not introduce another graphics framework, SQLite, JSON libraries, or any other external dependency unless the current task explicitly requests it.
 
 ---
