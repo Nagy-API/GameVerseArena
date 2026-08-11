@@ -96,6 +96,7 @@ The existing Visual Studio solution and project files remain available for IDE b
 
 - Move the pointer over a button to highlight it; click the left mouse button to activate it.
 - Use Up and Down to change the selected main-menu item and Enter to activate it.
+- Keyboard actions activate once per key press; release the key before activating another scene or overlay action.
 - Press Escape on Game Library, Settings, or About to return to the main menu.
 - Press Escape on the main menu to close the application.
 - Resize the window normally; the 16:9 interface view scales while preserving the layout. The practical design size is 960 x 540 or larger, with a default window size of 1280 x 720 and a 60 FPS frame limit.

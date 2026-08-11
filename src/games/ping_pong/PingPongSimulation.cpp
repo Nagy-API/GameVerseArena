@@ -65,10 +65,8 @@ std::optional<Side> PingPongSimulation::step(double seconds, const ControlInput&
     state_.ball.position.x += state_.ball.velocity.x * seconds;
     state_.ball.position.y += state_.ball.velocity.y * seconds;
 
-    resolveWalls();
-    resolvePaddle(state_.leftPaddle, Side::Left);
-    resolvePaddle(state_.rightPaddle, Side::Right);
-
+    // A point ends this simulation step. In particular, do not let a ball that
+    // has already crossed a goal line interact with a wall or paddle first.
     if (state_.ball.position.x + state_.ball.radius < state_.field.left) {
         pointAwarded_ = true;
         return Side::Right;
@@ -77,6 +75,10 @@ std::optional<Side> PingPongSimulation::step(double seconds, const ControlInput&
         pointAwarded_ = true;
         return Side::Left;
     }
+
+    resolveWalls();
+    resolvePaddle(state_.leftPaddle, Side::Left);
+    resolvePaddle(state_.rightPaddle, Side::Right);
     return std::nullopt;
 }
 

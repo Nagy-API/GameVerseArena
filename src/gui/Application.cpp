@@ -30,6 +30,7 @@ Application::Application(std::filesystem::path executableDirectory)
 {
     window_.setMinimumSize(sf::Vector2u{960u, 540u});
     window_.setFramerateLimit(60);
+    window_.setKeyRepeatEnabled(false);
 }
 
 int Application::run()

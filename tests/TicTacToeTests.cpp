@@ -123,6 +123,25 @@ void testSession()
     session.startNewMatch(replacement);
     check(session.playerName(Cell::X) == "Alice" && session.playerName(Cell::O) == "Player 2", "new match trims names and applies defaults");
     check(session.score().draws == 0 && session.roundNumber() == 1 && session.board().moveCount() == 0, "new match resets all match state");
+
+    SessionConfig computerOpens;
+    computerOpens.mode = GameMode::HumanVsComputer;
+    computerOpens.humanMark = Cell::O;
+    computerOpens.difficulty = AIDifficulty::Medium;
+    session.startNewMatch(computerOpens);
+    check(session.isComputerTurn() && session.computerMark() == Cell::X,
+          "Computer-as-X is the only side eligible for the automatic opening");
+    TicTacToeAI openingAI(2026);
+    const auto openingMove = openingAI.chooseMove(session.board(), session.computerMark(), computerOpens.difficulty);
+    check(openingMove && session.playMove(*openingMove), "Computer-as-X opening move is legal");
+    check(session.board().moveCount() == 1 && session.currentTurn() == Cell::O && !session.isComputerTurn(),
+          "one automatic opening hands control to the human without scheduling a second AI move");
+    session.restartRound();
+    check(session.board().moveCount() == 0 && session.isComputerTurn(),
+          "Restart Round clears the board and restores exactly one pending opening turn");
+    session.rematch();
+    check(session.board().moveCount() == 0 && session.isComputerTurn() && session.score().xWins == 0,
+          "Rematch clears live round state before Computer-as-X opens again");
 }
 
 bool humanCanForceWin(TicTacToeBoard board, Cell turn, Cell humanMark, TicTacToeAI& ai)

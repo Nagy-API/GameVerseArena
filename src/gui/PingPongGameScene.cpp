@@ -101,8 +101,8 @@ void PingPongGameScene::render(sf::RenderWindow& window) const
     drawPlayfield(window);
     if (session_.state() == MatchState::ServeCountdown) {
         const int count = std::max(1, static_cast<int>(std::ceil(session_.stateSecondsRemaining())));
-        drawCentered(window, "SERVE IN", {640.f, 330.f}, Theme::labelSize, Theme::textSecondary, true);
-        drawCentered(window, std::to_string(count), {640.f, 385.f}, 64, Theme::textPrimary, true);
+        drawCentered(window, "SERVE IN", {640.f, 300.f}, Theme::labelSize, Theme::textSecondary, true);
+        drawCentered(window, std::to_string(count), {640.f, 345.f}, 64, Theme::textPrimary, true);
     } else if (session_.state() == MatchState::PointScored && session_.lastScorer()) {
         drawCentered(window, session_.playerName(*session_.lastScorer()) + " scores", {640.f, 370.f}, 32,
                      *session_.lastScorer() == Side::Left ? Theme::arcadeLeft : Theme::arcadeRight, true);
