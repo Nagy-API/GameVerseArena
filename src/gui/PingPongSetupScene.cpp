@@ -1,6 +1,7 @@
 #include "PingPongSetupScene.hpp"
 
 #include "Theme.hpp"
+#include "Utf8Text.hpp"
 
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
@@ -13,13 +14,16 @@ namespace {
 std::string visibleName(const std::string& value)
 {
     constexpr std::size_t maximumVisible = 18;
-    return value.size() <= maximumVisible ? value : "..." + value.substr(value.size() - maximumVisible + 3);
+    return utf8_text::length(value) <= maximumVisible
+        ? value
+        : "..." + utf8_text::tail(value, maximumVisible - 3);
 }
 } // namespace
 
 PingPongSetupScene::PingPongSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                       SceneManager& sceneManager, PingPongSession& session)
-    : sceneManager_(sceneManager), session_(session),
+                                       SceneManager& sceneManager, PingPongSession& session,
+                                       persistence::ProfileService& profileService)
+    : sceneManager_(sceneManager), session_(session), profileService_(profileService),
       kicker_(semiboldFont, "ARCADE GAMES  /  PING PONG", Theme::labelSize),
       title_(semiboldFont, "Match setup", Theme::pageTitleSize),
       subtitle_(regularFont, "Choose your players and enter a first-to-five real-time match.", Theme::bodySize),
@@ -63,7 +67,7 @@ void PingPongSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
             else sceneManager_.switchTo(SceneId::GameLibrary);
         } else if (key->code == sf::Keyboard::Key::Backspace && editing_) {
             auto& name = selected_ == 1 ? playerOne_ : playerTwo_;
-            if (!name.empty()) name.pop_back();
+            utf8_text::eraseLast(name);
         } else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Down) moveSelection(1);
         else if (key->code == sf::Keyboard::Key::Up) moveSelection(-1);
         else if (key->code == sf::Keyboard::Key::Left) adjustSelected(-1);
@@ -106,7 +110,13 @@ void PingPongSetupScene::render(sf::RenderWindow& window) const
 }
 
 void PingPongSetupScene::onResize(sf::Vector2u) {}
-void PingPongSetupScene::onActivate() { editing_ = false; selected_ = 0; refresh(); }
+void PingPongSetupScene::onActivate()
+{
+    if (const auto active = profileService_.activeProfile(); active.has_value()) {
+        playerOne_ = active->displayName;
+    }
+    editing_ = false; selected_ = 0; refresh();
+}
 
 void PingPongSetupScene::moveSelection(int offset)
 {
@@ -132,7 +142,7 @@ void PingPongSetupScene::activateSelected()
 
 void PingPongSetupScene::editName(std::string& name, char32_t codepoint)
 {
-    if (codepoint >= 32 && codepoint <= 126 && name.size() < 24) name.push_back(static_cast<char>(codepoint));
+    utf8_text::appendPrintable(name, codepoint, 24);
 }
 
 void PingPongSetupScene::startMatch()
@@ -154,6 +164,7 @@ void PingPongSetupScene::refresh()
     values_[1].setString(visibleName(playerOne_) + (editing_ && selected_ == 1 ? " |" : ""));
     values_[2].setString(mode_ == 0 ? visibleName(playerTwo_) + (editing_ && selected_ == 2 ? " |" : "") : "Computer");
     values_[3].setString(mode_ == 0 ? "Not used" : difficulties[static_cast<std::size_t>(difficulty_)]);
+    labels_[1].setString("PLAYER 1 NAME  |  ACTIVE PROFILE DEFAULT");
     for (std::size_t index = 0; index < rowCount; ++index) {
         rows_[index].setOutlineColor(index == selected_ ? Theme::arcadeLeft : Theme::border);
         rows_[index].setOutlineThickness(index == selected_ ? 2.f : 1.f);

@@ -87,6 +87,8 @@ Reusable real-time simulation must remain independent from rendering and framewo
 
 SFML 3.1.0 is approved only for the graphical target. Do not introduce another graphics framework, SQLite, JSON libraries, or any other external dependency unless the current task explicitly requests it.
 
+The graphical target now embeds SQLite for local player profiles. Keep all SQL inside the persistence layer; GUI scenes must use the profile service rather than database APIs. Schema changes require an explicit migration and `PRAGMA user_version` bump. Persistence tests must use injected temporary database paths, the console target must remain SQLite-independent, and runtime database files must never be stored in the repository or build directories.
+
 ---
 
 ## C++ Standards

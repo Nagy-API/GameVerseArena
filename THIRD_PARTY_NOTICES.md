@@ -1,5 +1,9 @@
 # Third-party notices
 
+## SQLite
+
+GameVerseArena's graphical profile system statically embeds the unmodified `sqlite3.c` and `sqlite3.h` files from the official SQLite 3.53.4 amalgamation archive `sqlite-amalgamation-3530400.zip`. The verified archive SHA3-256 is `628a44cfe82c66aed1ccbbe85a562d2e33ebe64b3288981ed76285612227934e`. SQLite is dedicated to the public domain. Provenance details are recorded in `third_party/sqlite/README.md`.
+
 ## SFML
 
 GameVerseArena's graphical target fetches and links SFML 3.1.0 from the [official SFML repository](https://github.com/SFML/SFML) through CMake FetchContent. SFML is licensed under the zlib/libpng license; its source distribution contains the complete license text.

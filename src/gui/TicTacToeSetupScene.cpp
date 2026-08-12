@@ -1,6 +1,7 @@
 #include "TicTacToeSetupScene.hpp"
 
 #include "Theme.hpp"
+#include "Utf8Text.hpp"
 
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
@@ -18,14 +19,16 @@ constexpr std::array<const char*, 6> labels{
 std::string visibleName(const std::string& value)
 {
     constexpr std::size_t displayed = 18;
-    if (value.size() <= displayed) return value;
-    return "..." + value.substr(value.size() - (displayed - 3));
+    if (utf8_text::length(value) <= displayed) return value;
+    return "..." + utf8_text::tail(value, displayed - 3);
 }
 } // namespace
 
 TicTacToeSetupScene::TicTacToeSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                         SceneManager& sceneManager, TicTacToeSession& session)
-    : sceneManager_(sceneManager), session_(session), regularFont_(regularFont), semiboldFont_(semiboldFont),
+                                         SceneManager& sceneManager, TicTacToeSession& session,
+                                         persistence::ProfileService& profileService)
+    : sceneManager_(sceneManager), session_(session), profileService_(profileService),
+      regularFont_(regularFont), semiboldFont_(semiboldFont),
       kicker_(semiboldFont, "CLASSIC TIC-TAC-TOE", Theme::labelSize),
       title_(semiboldFont, "Player setup", Theme::pageTitleSize),
       subtitle_(regularFont, "Choose players, marks, and match length before entering the board.", Theme::bodySize),
@@ -77,7 +80,7 @@ void TicTacToeSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& 
             else sceneManager_.switchTo(SceneId::GameLibrary);
         } else if (key->code == sf::Keyboard::Key::Backspace && editing_) {
             auto& name = selected_ == 1 ? playerOne_ : playerTwo_;
-            if (!name.empty()) name.pop_back();
+            utf8_text::eraseLast(name);
         } else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Down) {
             moveSelection(1);
         } else if (key->code == sf::Keyboard::Key::Up) {
@@ -140,6 +143,9 @@ void TicTacToeSetupScene::onResize(sf::Vector2u) {}
 
 void TicTacToeSetupScene::onActivate()
 {
+    if (const auto active = profileService_.activeProfile(); active.has_value()) {
+        playerOne_ = active->displayName;
+    }
     editing_ = false;
     selected_ = 0;
     refresh();
@@ -194,6 +200,7 @@ void TicTacToeSetupScene::refresh()
     values_[3].setString(mode_ == 0 ? "X: Player 1  |  O: Player 2" : humanMark_ == 0 ? "X" : "O");
     values_[4].setString(mode_ == 0 ? "Not used" : difficulties[static_cast<std::size_t>(difficulty_)]);
     values_[5].setString(lengths[static_cast<std::size_t>(bestOf_)]);
+    labels_[1].setString("PLAYER 1 NAME  |  ACTIVE PROFILE DEFAULT");
     for (std::size_t index = 0; index < rowCount; ++index) {
         rows_[index].setOutlineColor(index == selected_ ? Theme::primaryBright : Theme::border);
         rows_[index].setOutlineThickness(index == selected_ ? 2.f : 1.f);
@@ -204,5 +211,5 @@ void TicTacToeSetupScene::refresh()
 
 void TicTacToeSetupScene::editName(std::string& name, char32_t codepoint)
 {
-    if (codepoint >= 32 && codepoint <= 126 && name.size() < 24) name.push_back(static_cast<char>(codepoint));
+    utf8_text::appendPrintable(name, codepoint, 24);
 }

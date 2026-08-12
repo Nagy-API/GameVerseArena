@@ -10,7 +10,8 @@
 
 `SceneManager` owns the scenes and changes the active scene without transferring or exposing ownership. Its activation callback lets stateful scenes safely initialize transient work such as an AI-turn timer. Scene switches are synchronous, but the event that requests a switch finishes in the old scene; application-wide key repeat is disabled so a held activation key cannot immediately trigger an overlay or control in the newly active scene. The shell contains:
 
-- `MainMenuScene`: Play, Settings, About, and Exit navigation with keyboard and mouse input.
+- `MainMenuScene`: Play, Profiles, Settings, About, and Exit navigation with keyboard and mouse input.
+- `ProfilesScene`: bounded/scrollable local profile selection plus Create, Rename, Delete, Set Active, and Back actions. `ProfileEditOverlay` and `ProfileDeleteOverlay` own transient input and confirmation presentation; all validation and state transitions remain in `ProfileService`.
 - `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe and Ping Pong while truthfully identifying the other 13 board games as console-only.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
 - `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
@@ -23,6 +24,23 @@
 - `AboutScene`: technology and current-milestone information.
 
 `UiButton` provides common bounds, label rendering, hover and selected states, click hit-testing, and delta-time-based visual transitions. `Theme.hpp` centralizes the shell's colors, spacing, type sizes, and animation speed. `AssetManager` loads each required Inter font once, and CMake copies the assets beside the GUI executable.
+
+## Local persistence layer
+
+The SQLite-backed persistence module lives under `src/persistence` and links as the SFML-independent `GameVerseArenaPersistence` library. Only `GameVerseArenaGUI` links it; the 14-game `GameVerseArena` console target remains SQLite-independent.
+
+- `Database` owns the SQLite connection and statement lifetime through RAII, applies a 3000 ms busy timeout, enables foreign keys, initializes schema once, and provides transaction boundaries.
+- `DatabasePaths` resolves the production file to `%LOCALAPPDATA%\GameVerseArena\gameverse.db` on Windows, XDG/home application data on other platforms, or a portable temporary-directory fallback. Database construction creates a missing parent directory. Tests inject an explicit temporary path and never open production storage.
+- `ProfileRepository` contains all profile and active-selection SQL. User values are bound through prepared statements; no GUI source contains raw SQL.
+- `ProfileService` owns name normalization/validation, uniqueness checks, first-run bootstrap, active-profile changes, and safe delete replacement rules.
+
+Schema v1 is tracked with `PRAGMA user_version`. Version 0 is upgraded transactionally by creating `profiles(id, display_name, created_at, updated_at, last_used_at)` with case-insensitive display-name uniqueness and normalized `app_state(key, profile_id)` storage for the active profile. Version 1 opens normally; unknown future versions fail startup with a clear error instead of being modified. Foreign-key enforcement prevents an orphaned active reference.
+
+On first run the service creates exactly one `Player 1` and makes it active. Activating a profile persists its ID and advances `last_used_at`. Deleting an inactive profile leaves the active selection alone; deleting the active profile chooses the most recently used remaining profile; deleting the final profile recreates and activates `Player 1`.
+
+`Application` initializes the database and bootstraps the service before registering scenes. A startup failure is reported to stderr and in a Windows fatal error dialog. Both setup scenes request the active display name on activation and copy it into their editable Player 1 field. That copy is a per-match default only: setup edits never call rename and match results are not stored.
+
+`GameVerseArenaPersistenceTests` links no SFML and uses only temporary injected database files. It covers schema lifecycle/version rejection, foreign keys, bootstrap idempotence, validation, duplicate handling, timestamps, active persistence and deletion rules, path isolation, clean reopen, and SQL-safety names.
 
 ## Graphical Classic Tic-Tac-Toe module
 
@@ -99,7 +117,7 @@ The scoreboard is shared across games during the current application session. It
 
 - The playable board-game user interface and input model remain console-based and synchronous.
 - Classic Tic-Tac-Toe is the graphical turn-based game, Ping Pong is the only graphical arcade game, and the other 13 board games remain console-only.
-- Settings are labeled previews and do not persist or change application behavior.
+- Settings are labeled previews and do not persist or change application behavior. Player profiles and the active selection are the only persistent application data.
 - Ping Pong currently supports local two-player and local Human-vs-Computer play only; it has no audio, controller support, networking, or persistent match history.
 - The shared framework assumes two players taking discrete, alternating turns.
 - Game completion is expressed through `Board<T>` win, loss, and draw queries.

@@ -9,6 +9,8 @@
 #include "TicTacToeSetupScene.hpp"
 #include "PingPongGameScene.hpp"
 #include "PingPongSetupScene.hpp"
+#include "ProfilesScene.hpp"
+#include "DatabasePaths.hpp"
 
 #include <SFML/Graphics/View.hpp>
 #include <SFML/System/Clock.hpp>
@@ -24,8 +26,10 @@
 #include <windows.h>
 #endif
 
-Application::Application(std::filesystem::path executableDirectory)
+Application::Application(std::filesystem::path executableDirectory,
+                         std::optional<std::filesystem::path> databasePath)
     : executableDirectory_(std::move(executableDirectory)),
+      databasePath_(std::move(databasePath)),
       window_(sf::VideoMode({1280u, 720u}), "GameVerseArena")
 {
     window_.setMinimumSize(sf::Vector2u{960u, 540u});
@@ -82,16 +86,34 @@ bool Application::initialize()
         return false;
     }
 
+    try {
+        const auto path = databasePath_.has_value()
+            ? *databasePath_
+            : persistence::DatabasePaths::productionDatabasePath();
+        database_ = std::make_unique<persistence::Database>(path);
+        profileService_ = std::make_unique<persistence::ProfileService>(*database_);
+        profileService_->bootstrap();
+    } catch (const std::exception& exception) {
+        const std::string error = std::string("Player profiles could not be initialized.\n\n") + exception.what();
+        std::cerr << "GameVerseArenaGUI: " << error << '\n';
+#ifdef _WIN32
+        MessageBoxA(nullptr, error.c_str(), "GameVerseArenaGUI - Profile database error", MB_OK | MB_ICONERROR);
+#endif
+        return false;
+    }
+
     scenes_.add(SceneId::MainMenu, std::make_unique<MainMenuScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, window_));
+    scenes_.add(SceneId::Profiles, std::make_unique<ProfilesScene>(
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_));
     scenes_.add(SceneId::GameLibrary, std::make_unique<GameLibraryScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_));
     scenes_.add(SceneId::TicTacToeSetup, std::make_unique<TicTacToeSetupScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_));
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_, *profileService_));
     scenes_.add(SceneId::TicTacToeGame, std::make_unique<TicTacToeGameScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_));
     scenes_.add(SceneId::PingPongSetup, std::make_unique<PingPongSetupScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_));
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_, *profileService_));
     scenes_.add(SceneId::PingPongGame, std::make_unique<PingPongGameScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_));
     scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(

@@ -3,7 +3,7 @@
 GameVerseArena is a C++17 games platform with two independently buildable applications:
 
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
-- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
+- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, a game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
 
 Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
@@ -30,7 +30,7 @@ Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original
 - Git (used by CMake FetchContent)
 - A C++17 compiler, such as Visual Studio C++ or GNU C++
 
-The graphical target uses SFML 3.1.0. CMake fetches the pinned release from the official SFML repository, so the first configure requires an internet connection and may take several minutes while SFML is downloaded and built. The console sources can still be compiled directly without SFML.
+The graphical target uses SFML 3.1.0. CMake fetches the pinned release from the official SFML repository, so the first configure requires an internet connection and may take several minutes while SFML is downloaded and built. SQLite 3.53.4 is vendored from the official amalgamation and requires no installed DLL, package manager, or network access. The console sources remain independent of both SFML and SQLite and can still be compiled directly.
 
 ## Build on Windows
 
@@ -48,6 +48,7 @@ cmake --build build --config Release --target GameVerseArena
 cmake --build build --config Release --target GameVerseArenaGUI
 cmake --build build --config Release --target GameVerseArenaTests
 cmake --build build --config Release --target GameVerseArenaPingPongTests
+cmake --build build --config Release --target GameVerseArenaPersistenceTests
 ctest --test-dir build --output-on-failure
 ```
 
@@ -92,12 +93,22 @@ The application entry point is `XO_Demo.cpp`, and the shared turn-based abstract
 
 The existing Visual Studio solution and project files remain available for IDE builds.
 
+## Local player profiles
+
+Choose **Profiles** from the main menu to create, rename, delete, and select local player profiles. Profile names are trimmed, limited to 24 Unicode text units, reject control characters, and must be unique without regard to ASCII letter casing. A fresh database contains exactly one active `Player 1` profile.
+
+The active profile persists across application restarts and supplies the initial Player 1 name in both Classic Tic-Tac-Toe and Ping Pong setup. That setup field remains freely editable for each match; editing it affects only the match and never renames the stored profile. Deleting the active profile automatically selects the most recently used remaining profile. Deleting the last profile safely recreates and activates `Player 1`.
+
+On Windows, profile data is stored at `%LOCALAPPDATA%\GameVerseArena\gameverse.db`. Other platforms use `$XDG_DATA_HOME/GameVerseArena/gameverse.db`, then `$HOME/.local/share/GameVerseArena/gameverse.db`, with the system temporary directory as a final fallback. Data is local to the machine. Match history, statistics, achievements, settings persistence, and cloud synchronization are not implemented.
+
+For isolated startup testing, the GUI accepts `--database <path>`. This explicitly injected path should be used for destructive tests so real profile data is never touched.
+
 ## GUI shell controls
 
 - Move the pointer over a button to highlight it; click the left mouse button to activate it.
 - Use Up and Down to change the selected main-menu item and Enter to activate it.
 - Keyboard actions activate once per key press; release the key before activating another scene or overlay action.
-- Press Escape on Game Library, Settings, or About to return to the main menu.
+- Press Escape on Profiles, Game Library, Settings, or About to return to the main menu. In profile edit/delete overlays, Escape cancels the overlay first.
 - Press Escape on the main menu to close the application.
 - Resize the window normally; the 16:9 interface view scales while preserving the layout. The practical design size is 960 x 540 or larger, with a default window size of 1280 x 720 and a 60 FPS frame limit.
 
@@ -113,7 +124,7 @@ Choose **Play**, select **Classic Tic-Tac-Toe**, complete Player Setup, and star
 
 Setup is fully keyboard accessible: use Up/Down or Tab to move, Left/Right to change choices, Enter to edit names or activate a control, Backspace to edit, and Escape to go back. During a match, use the arrow keys to select a board cell and Enter or Space to play it. Mouse hover and click are supported throughout. Escape or **Back to Library** opens a confirmation before discarding an active in-memory match.
 
-No player profile, score history, or other game data is persisted between application runs.
+The active profile provides Player 1's initial setup name. Match-specific edits and results are not persisted.
 
 ## Ping Pong in the GUI
 

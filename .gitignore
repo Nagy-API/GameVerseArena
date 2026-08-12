@@ -47,6 +47,13 @@ _deps/
 *.lastbuildstate
 *.recipe
 
+# Local runtime persistence
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
 # Logs, caches, and temporary files
 *.log
 .cache/

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(GameVerseArena LANGUAGES CXX)
+project(GameVerseArena LANGUAGES C CXX)
 
 enable_testing()
 
@@ -74,7 +74,36 @@ add_executable(GameVerseArenaGUI
     "src/gui/PingPongGameScene.cpp"
     "src/gui/PingPongPauseOverlay.cpp"
     "src/gui/PingPongResultOverlay.cpp"
+    "src/gui/ProfilesScene.cpp"
+    "src/gui/ProfileEditOverlay.cpp"
+    "src/gui/ProfileDeleteOverlay.cpp"
 )
+
+add_library(GameVerseArenaSQLite STATIC
+    "third_party/sqlite/sqlite3.c"
+)
+
+target_include_directories(GameVerseArenaSQLite PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite"
+)
+
+target_compile_definitions(GameVerseArenaSQLite PRIVATE
+    SQLITE_OMIT_LOAD_EXTENSION
+)
+
+add_library(GameVerseArenaPersistence
+    "src/persistence/Database.cpp"
+    "src/persistence/DatabasePaths.cpp"
+    "src/persistence/ProfileRepository.cpp"
+    "src/persistence/ProfileService.cpp"
+)
+
+target_include_directories(GameVerseArenaPersistence PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/persistence"
+)
+
+target_compile_features(GameVerseArenaPersistence PUBLIC cxx_std_17)
+target_link_libraries(GameVerseArenaPersistence PRIVATE GameVerseArenaSQLite)
 
 add_library(GameVerseArenaTicTacToe
     "src/games/classic_tic_tac_toe/TicTacToeBoard.cpp"
@@ -116,6 +145,14 @@ target_link_libraries(GameVerseArenaPingPongTests PRIVATE GameVerseArenaPingPong
 target_compile_features(GameVerseArenaPingPongTests PRIVATE cxx_std_17)
 add_test(NAME PingPongTests COMMAND GameVerseArenaPingPongTests)
 
+add_executable(GameVerseArenaPersistenceTests
+    "tests/PersistenceTests.cpp"
+)
+
+target_link_libraries(GameVerseArenaPersistenceTests PRIVATE GameVerseArenaPersistence)
+target_compile_features(GameVerseArenaPersistenceTests PRIVATE cxx_std_17)
+add_test(NAME PersistenceTests COMMAND GameVerseArenaPersistenceTests)
+
 set_target_properties(GameVerseArenaGUI PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
@@ -129,7 +166,12 @@ if(WIN32)
     endif()
 endif()
 
-target_link_libraries(GameVerseArenaGUI PRIVATE GameVerseArenaTicTacToe GameVerseArenaPingPong SFML::Graphics)
+target_link_libraries(GameVerseArenaGUI PRIVATE
+    GameVerseArenaTicTacToe
+    GameVerseArenaPingPong
+    GameVerseArenaPersistence
+    SFML::Graphics
+)
 
 add_custom_command(TARGET GameVerseArenaGUI POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_directory

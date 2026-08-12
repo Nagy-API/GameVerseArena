@@ -40,11 +40,11 @@ MainMenuScene::MainMenuScene(const sf::Font& regularFont,
     footer_.setPosition({72.f, 650.f});
     footer_.setFillColor(Theme::textMuted);
 
-    const std::array<std::string, 4> labels{"Play", "Settings", "About", "Exit"};
+    const std::array<std::string, 5> labels{"Play", "Profiles", "Settings", "About", "Exit"};
     buttons_.reserve(labels.size());
     for (std::size_t index = 0; index < labels.size(); ++index) {
         buttons_.emplace_back(semiboldFont, labels[index], sf::Vector2f{Theme::buttonWidth, Theme::buttonHeight});
-        buttons_.back().setPosition({820.f, 218.f + static_cast<float>(index) * (Theme::buttonHeight + Theme::buttonGap)});
+        buttons_.back().setPosition({820.f, 174.f + static_cast<float>(index) * (Theme::buttonHeight + Theme::buttonGap)});
     }
     refreshSelection();
 }
@@ -119,12 +119,15 @@ void MainMenuScene::activate(std::size_t index)
         sceneManager_.switchTo(SceneId::GameLibrary);
         break;
     case 1:
-        sceneManager_.switchTo(SceneId::Settings);
+        sceneManager_.switchTo(SceneId::Profiles);
         break;
     case 2:
-        sceneManager_.switchTo(SceneId::About);
+        sceneManager_.switchTo(SceneId::Settings);
         break;
     case 3:
+        sceneManager_.switchTo(SceneId::About);
+        break;
+    case 4:
         window_.close();
         break;
     default:
