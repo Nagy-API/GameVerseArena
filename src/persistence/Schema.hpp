@@ -2,7 +2,7 @@
 
 namespace persistence::schema {
 
-inline constexpr int currentVersion = 2;
+inline constexpr int currentVersion = 3;
 
 inline constexpr const char* createVersionOne = R"sql(
 CREATE TABLE profiles (
@@ -47,6 +47,17 @@ CREATE INDEX matches_profile_game_completed ON matches(profile_id, game_key, com
 CREATE INDEX matches_profile_result_completed ON matches(profile_id, result, completed_at DESC);
 
 PRAGMA user_version = 2;
+)sql";
+
+inline constexpr const char* migrateVersionTwoToThree = R"sql(
+CREATE TABLE achievement_unlocks (
+    profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    achievement_key TEXT NOT NULL,
+    unlocked_at INTEGER NOT NULL,
+    PRIMARY KEY (profile_id, achievement_key)
+);
+
+PRAGMA user_version = 3;
 )sql";
 
 } // namespace persistence::schema

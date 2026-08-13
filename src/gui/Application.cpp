@@ -12,7 +12,9 @@
 #include "ProfilesScene.hpp"
 #include "ProfileStatsScene.hpp"
 #include "MatchHistoryScene.hpp"
+#include "ProfileAchievementsScene.hpp"
 #include "DatabasePaths.hpp"
+#include "AchievementToast.hpp"
 
 #include <SFML/Graphics/View.hpp>
 #include <SFML/System/Clock.hpp>
@@ -61,6 +63,10 @@ int Application::run()
                 scenes_.active().onResize(resized->size);
             }
 
+            if (achievementToast_ && achievementToast_->handleEvent(*event, window_)) {
+                continue;
+            }
+
             if (window_.isOpen()) {
                 scenes_.active().handleEvent(*event, window_);
             }
@@ -68,9 +74,11 @@ int Application::run()
 
         const auto deltaTime = sf::seconds(std::min(clock.restart().asSeconds(), 0.05f));
         scenes_.active().update(deltaTime);
+        achievementToast_->update(deltaTime);
 
         window_.clear(Theme::background);
         scenes_.active().render(window_);
+        achievementToast_->render(window_);
         window_.display();
     }
 
@@ -100,6 +108,10 @@ bool Application::initialize()
         pingPongRecorder_ = std::make_unique<persistence::MatchRecorder>(*matchService_);
         matchRepository_ = std::make_unique<persistence::MatchRepository>(*database_);
         statisticsRepository_ = std::make_unique<persistence::StatisticsRepository>(*database_);
+        achievementService_ = std::make_unique<persistence::AchievementService>(*database_);
+        achievementService_->backfillAll();
+        achievementToast_ = std::make_unique<AchievementToast>(
+            assets_.regularFont(), assets_.semiboldFont(), achievementNotifications_);
     } catch (const std::exception& exception) {
         const std::string error = std::string("Player profiles could not be initialized.\n\n") + exception.what();
         std::cerr << "GameVerseArenaGUI: " << error << '\n';
@@ -115,7 +127,10 @@ bool Application::initialize()
         assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_, selectedStatsProfileId_));
     scenes_.add(SceneId::ProfileStats, std::make_unique<ProfileStatsScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_,
-        *statisticsRepository_, selectedStatsProfileId_));
+        *statisticsRepository_, *achievementService_, selectedStatsProfileId_));
+    scenes_.add(SceneId::ProfileAchievements, std::make_unique<ProfileAchievementsScene>(
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_,
+        *achievementService_, selectedStatsProfileId_));
     scenes_.add(SceneId::MatchHistory, std::make_unique<MatchHistoryScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_,
         *matchRepository_, selectedStatsProfileId_));
@@ -124,11 +139,13 @@ bool Application::initialize()
     scenes_.add(SceneId::TicTacToeSetup, std::make_unique<TicTacToeSetupScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_, *profileService_, *ticTacToeRecorder_));
     scenes_.add(SceneId::TicTacToeGame, std::make_unique<TicTacToeGameScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_, *ticTacToeRecorder_));
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_, *ticTacToeRecorder_,
+        *achievementService_, achievementNotifications_));
     scenes_.add(SceneId::PingPongSetup, std::make_unique<PingPongSetupScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_, *profileService_, *pingPongRecorder_));
     scenes_.add(SceneId::PingPongGame, std::make_unique<PingPongGameScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_, *pingPongRecorder_));
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_, *pingPongRecorder_,
+        *achievementService_, achievementNotifications_));
     scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(
         assets_.regularFont(), assets_.semiboldFont(), scenes_));
     scenes_.add(SceneId::About, std::make_unique<AboutScene>(

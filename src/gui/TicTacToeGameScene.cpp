@@ -26,8 +26,11 @@ std::string matchLength(BestOf bestOf)
 
 TicTacToeGameScene::TicTacToeGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                                        SceneManager& sceneManager, TicTacToeSession& session,
-                                       persistence::MatchRecorder& matchRecorder)
-    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), regularFont_(regularFont), semiboldFont_(semiboldFont),
+                                       persistence::MatchRecorder& matchRecorder,
+                                       persistence::AchievementService& achievements,
+                                       achievements::AchievementNotificationQueue& notifications)
+    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), achievements_(achievements),
+      notifications_(notifications), regularFont_(regularFont), semiboldFont_(semiboldFont),
       backButton_(semiboldFont, "Back to Library", {190.f, 50.f}),
       restartButton_(semiboldFont, "Restart Round", {190.f, 50.f}),
       newMatchButton_(semiboldFont, "New Match", {190.f, 50.f}),
@@ -253,7 +256,14 @@ void TicTacToeGameScene::updateButtonStates()
 void TicTacToeGameScene::recordIfComplete()
 {
     if (!session_.matchFinished()) return;
-    try { matchRecorder_.completeTicTacToe(session_); }
+    try {
+        if (!matchRecorder_.completeTicTacToe(session_)) return;
+        try { notifications_.enqueue(achievements_.evaluateAndUnlock(matchRecorder_.profileId())); }
+        catch (const std::exception& error) {
+            resultOverlay_.setWarning("Match saved, but achievements could not be updated.");
+            std::cerr << "GameVerseArenaGUI: Tic-Tac-Toe achievement evaluation failed: " << error.what() << '\n';
+        }
+    }
     catch (const std::exception& error) {
         resultOverlay_.setWarning("Match complete, but history could not be saved.");
         std::cerr << "GameVerseArenaGUI: Tic-Tac-Toe history save failed: " << error.what() << '\n';

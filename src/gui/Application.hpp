@@ -10,6 +10,9 @@
 #include "MatchRecorder.hpp"
 #include "MatchRepository.hpp"
 #include "StatisticsRepository.hpp"
+#include "AchievementService.hpp"
+#include "AchievementNotificationQueue.hpp"
+#include "AchievementToast.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -41,5 +44,8 @@ private:
     std::unique_ptr<persistence::MatchRecorder> pingPongRecorder_;
     std::unique_ptr<persistence::MatchRepository> matchRepository_;
     std::unique_ptr<persistence::StatisticsRepository> statisticsRepository_;
+    std::unique_ptr<persistence::AchievementService> achievementService_;
+    achievements::AchievementNotificationQueue achievementNotifications_;
+    std::unique_ptr<AchievementToast> achievementToast_;
     std::int64_t selectedStatsProfileId_{};
 };

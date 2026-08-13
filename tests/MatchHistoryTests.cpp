@@ -68,15 +68,15 @@ void testMigration(const std::filesystem::path& directory)
     const auto path = directory / "migration.db";
     {
         persistence::Database database(path);
-        check(database.userVersion() == 2, "new database opens at schema v2");
+        check(database.userVersion() == 3, "new database opens at schema v3");
         persistence::ProfileService profiles(database); profiles.bootstrap();
         profiles.createProfile("Survivor");
     }
     {
         persistence::Database database(path);
         persistence::ProfileService profiles(database);
-        check(database.userVersion() == 2 && profiles.listProfiles().size() == 2,
-              "v2 reopen is idempotent and profiles survive");
+        check(database.userVersion() == 3 && profiles.listProfiles().size() == 2,
+              "v3 reopen is idempotent and profiles survive");
         check(profiles.activeProfile().has_value(), "active profile survives schema reopen");
     }
 
@@ -92,11 +92,12 @@ void testMigration(const std::filesystem::path& directory)
         database.execute("DROP INDEX IF EXISTS matches_profile_game_completed;");
         database.execute("DROP INDEX IF EXISTS matches_profile_completed;");
         database.execute("DROP TABLE matches;");
+        database.execute("DROP TABLE achievement_unlocks;");
         database.execute("PRAGMA user_version = 1;");
     }
     {
         persistence::Database migrated(v1Path);
-        check(migrated.userVersion() == 2, "an existing v1 database migrates to v2");
+        check(migrated.userVersion() == 3, "an existing v1 database migrates through v2 to v3");
         auto table = migrated.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='matches';");
         check(table.step() && table.integer(0) == 1, "v1 to v2 migration creates matches table");
         persistence::ProfileService profiles(migrated);
@@ -106,10 +107,10 @@ void testMigration(const std::filesystem::path& directory)
     }
 
     const auto futurePath = directory / "future.db";
-    { persistence::Database database(futurePath); database.execute("PRAGMA user_version = 3;"); }
-    try { persistence::Database unsupported(futurePath); check(false, "future v3 must be rejected"); }
+    { persistence::Database database(futurePath); database.execute("PRAGMA user_version = 4;"); }
+    try { persistence::Database unsupported(futurePath); check(false, "future v4 must be rejected"); }
     catch (const std::runtime_error& error) {
-        check(std::string(error.what()).find("version 3") != std::string::npos, "future-version rejection identifies v3");
+        check(std::string(error.what()).find("version 4") != std::string::npos, "future-version rejection identifies v4");
     }
 }
 
@@ -221,6 +222,8 @@ void testRecorder(const std::filesystem::path& directory)
     xConfig.difficulty=classic_ttt::AIDifficulty::Hard; xConfig.bestOf=classic_ttt::BestOf::Single;
     ticTacToe.startNewMatch(xConfig); recorder.beginTicTacToe(profile, ticTacToe.config()); finishXWin(ticTacToe);
     check(recorder.completeTicTacToe(ticTacToe), "profile-as-X terminal win records");
+    check(recorder.profileId() == profile.id,
+          "recorder retains the persistent profile identity after successful finalization");
     check(!recorder.completeTicTacToe(ticTacToe) && history.count(profile.id,{}) == 1,
           "duplicate Tic-Tac-Toe finalization inserts only one row");
     auto rows=history.recent(profile.id,{},20,0);

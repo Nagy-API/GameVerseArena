@@ -118,6 +118,7 @@ public:
 
     void abandon() noexcept { active_ = false; running_ = false; finalized_ = true; }
     bool finalized() const noexcept { return finalized_; }
+    std::int64_t profileId() const noexcept { return profileId_; }
 
 private:
     using SteadyDuration = std::chrono::steady_clock::duration;

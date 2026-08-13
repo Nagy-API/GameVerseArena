@@ -29,18 +29,20 @@ std::string played(const std::optional<std::int64_t>& value)
 
 ProfileStatsScene::ProfileStatsScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
     SceneManager& scenes, persistence::ProfileService& profiles, persistence::StatisticsRepository& statistics,
+    persistence::AchievementService& achievements,
     std::int64_t& selectedProfileId)
-    : scenes_(scenes),profiles_(profiles),statistics_(statistics),selectedProfileId_(selectedProfileId),regular_(regularFont),
+    : scenes_(scenes),profiles_(profiles),statistics_(statistics),achievements_(achievements),selectedProfileId_(selectedProfileId),regular_(regularFont),
       kicker_(semiboldFont,"PLAYER PROFILE",Theme::labelSize),title_(semiboldFont,"Statistics",Theme::pageTitleSize),
-      subtitle_(regularFont,"",Theme::bodySize),empty_(regularFont,"",22),
+      subtitle_(regularFont,"",Theme::bodySize),empty_(regularFont,"",22),achievementSummary_(semiboldFont,"",18),
       cards_{sf::Text(regularFont,"",18),sf::Text(regularFont,"",18),sf::Text(regularFont,"",18)},
-      buttons_{UiButton(semiboldFont,"Recent Matches",{250.f,54.f}),UiButton(semiboldFont,"Back",{170.f,54.f})}
+      buttons_{UiButton(semiboldFont,"Recent Matches",{220.f,54.f}),UiButton(semiboldFont,"Achievements",{220.f,54.f}),UiButton(semiboldFont,"Back",{170.f,54.f})}
 {
     kicker_.setPosition({72.f,42.f}); kicker_.setFillColor(Theme::secondary); title_.setPosition({72.f,70.f}); title_.setFillColor(Theme::textPrimary);
     subtitle_.setPosition({72.f,125.f}); subtitle_.setFillColor(Theme::textSecondary); empty_.setPosition({72.f,260.f}); empty_.setFillColor(Theme::textSecondary);
     cards_[0].setPosition({72.f,185.f}); cards_[1].setPosition({452.f,185.f}); cards_[2].setPosition({832.f,185.f});
     for(auto& card:cards_){card.setFillColor(Theme::textPrimary);card.setLineSpacing(1.35f);}
-    buttons_[0].setPosition({838.f,635.f}); buttons_[1].setPosition({72.f,635.f}); select(0);
+    achievementSummary_.setPosition({72.f,590.f}); achievementSummary_.setFillColor(Theme::warning);
+    buttons_[0].setPosition({746.f,635.f}); buttons_[1].setPosition({976.f,635.f}); buttons_[2].setPosition({72.f,635.f}); select(0);
 }
 void ProfileStatsScene::onActivate()
 {
@@ -50,6 +52,7 @@ void ProfileStatsScene::onActivate()
     const auto active=profiles_.activeProfile(); subtitle_.setString(found->displayName+(active&&active->id==found->id?"  |  ACTIVE":""));
     const auto overall=statistics_.overall(selectedProfileId_); const auto ttt=statistics_.forGame(selectedProfileId_,persistence::GameKey::ClassicTicTacToe);
     const auto pong=statistics_.forGame(selectedProfileId_,persistence::GameKey::PingPong);
+    achievementSummary_.setString("Achievements: "+std::to_string(achievements_.unlockedCount(selectedProfileId_))+" / 12");
     empty_.setString(overall.matches==0?"No matches yet.\nPlay Tic-Tac-Toe or Ping Pong to build your history.":"");
     cards_[0].setString("OVERALL\n\nMatches  "+std::to_string(overall.matches)+"\nWins / Losses / Draws  "+std::to_string(overall.wins)+" / "+std::to_string(overall.losses)+" / "+std::to_string(overall.draws)+"\nWin rate  "+rate(overall.winRate)+"\nPlay time  "+duration(overall.totalDurationMs)+"\nCurrent / best streak  "+std::to_string(overall.currentWinStreak)+" / "+std::to_string(overall.bestWinStreak)+"\nLast played  "+played(overall.lastPlayedAt));
     cards_[1].setString("CLASSIC TIC-TAC-TOE\n\nMatches  "+std::to_string(ttt.matches)+"\nW / L / D  "+std::to_string(ttt.wins)+" / "+std::to_string(ttt.losses)+" / "+std::to_string(ttt.draws)+"\nWin rate  "+rate(ttt.winRate)+"\nPlay time  "+duration(ttt.totalDurationMs)+"\nAs X / O  "+std::to_string(ttt.ticTacToeAsX)+" / "+std::to_string(ttt.ticTacToeAsO)+"\nSingle / BO3 / BO5  "+std::to_string(ttt.singleMatches)+" / "+std::to_string(ttt.bestOfThreeMatches)+" / "+std::to_string(ttt.bestOfFiveMatches));
@@ -58,7 +61,7 @@ void ProfileStatsScene::onActivate()
     select(0);
 }
 void ProfileStatsScene::select(std::size_t index){selected_=index;for(std::size_t i=0;i<buttons_.size();++i)buttons_[i].setSelected(i==selected_);}
-void ProfileStatsScene::activate(std::size_t index){scenes_.switchTo(index==0?SceneId::MatchHistory:SceneId::Profiles);}
-void ProfileStatsScene::handleEvent(const sf::Event& e,sf::RenderWindow& w){if(const auto* k=e.getIf<sf::Event::KeyPressed>()){if(k->code==sf::Keyboard::Key::Escape)activate(1);else if(k->code==sf::Keyboard::Key::Left||k->code==sf::Keyboard::Key::Right||k->code==sf::Keyboard::Key::Tab)select(1-selected_);else if(k->code==sf::Keyboard::Key::Enter||k->code==sf::Keyboard::Key::Space)activate(selected_);}if(const auto* m=e.getIf<sf::Event::MouseMoved>()){const auto p=w.mapPixelToCoords(m->position);for(std::size_t i=0;i<buttons_.size();++i){buttons_[i].setHovered(buttons_[i].contains(p));if(buttons_[i].contains(p))select(i);}}if(const auto* c=e.getIf<sf::Event::MouseButtonReleased>();c&&c->button==sf::Mouse::Button::Left){const auto p=w.mapPixelToCoords(c->position);for(std::size_t i=0;i<buttons_.size();++i)if(buttons_[i].contains(p))activate(i);}}
+void ProfileStatsScene::activate(std::size_t index){if(index==0)scenes_.switchTo(SceneId::MatchHistory);else if(index==1)scenes_.switchTo(SceneId::ProfileAchievements);else scenes_.switchTo(SceneId::Profiles);}
+void ProfileStatsScene::handleEvent(const sf::Event& e,sf::RenderWindow&w){if(const auto*k=e.getIf<sf::Event::KeyPressed>()){if(k->code==sf::Keyboard::Key::Escape)activate(2);else if(k->code==sf::Keyboard::Key::Right||k->code==sf::Keyboard::Key::Tab)select((selected_+1)%buttons_.size());else if(k->code==sf::Keyboard::Key::Left)select((selected_+buttons_.size()-1)%buttons_.size());else if(k->code==sf::Keyboard::Key::Enter||k->code==sf::Keyboard::Key::Space)activate(selected_);}if(const auto*m=e.getIf<sf::Event::MouseMoved>()){const auto p=w.mapPixelToCoords(m->position);for(std::size_t i=0;i<buttons_.size();++i){buttons_[i].setHovered(buttons_[i].contains(p));if(buttons_[i].contains(p))select(i);}}if(const auto*c=e.getIf<sf::Event::MouseButtonReleased>();c&&c->button==sf::Mouse::Button::Left){const auto p=w.mapPixelToCoords(c->position);for(std::size_t i=0;i<buttons_.size();++i)if(buttons_[i].contains(p))activate(i);}}
 void ProfileStatsScene::update(sf::Time dt){for(auto& b:buttons_)b.update(dt);}
-void ProfileStatsScene::render(sf::RenderWindow& w)const{w.draw(kicker_);w.draw(title_);w.draw(subtitle_);for(const auto& c:cards_)w.draw(c);w.draw(empty_);for(const auto& b:buttons_)b.draw(w);}
+void ProfileStatsScene::render(sf::RenderWindow&w)const{w.draw(kicker_);w.draw(title_);w.draw(subtitle_);for(const auto&c:cards_)w.draw(c);w.draw(empty_);w.draw(achievementSummary_);for(const auto&b:buttons_)b.draw(w);}

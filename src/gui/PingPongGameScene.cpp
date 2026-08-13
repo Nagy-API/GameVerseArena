@@ -17,8 +17,11 @@ using namespace ping_pong;
 
 PingPongGameScene::PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                                      SceneManager& sceneManager, PingPongSession& session,
-                                     persistence::MatchRecorder& matchRecorder)
-    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), regularFont_(regularFont), semiboldFont_(semiboldFont),
+                                     persistence::MatchRecorder& matchRecorder,
+                                     persistence::AchievementService& achievements,
+                                     achievements::AchievementNotificationQueue& notifications)
+    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), achievements_(achievements),
+      notifications_(notifications), regularFont_(regularFont), semiboldFont_(semiboldFont),
       pauseButton_(semiboldFont, "Pause", {150.f, 48.f}),
       pauseOverlay_(regularFont, semiboldFont), resultOverlay_(regularFont, semiboldFont)
 {
@@ -203,7 +206,14 @@ void PingPongGameScene::handleResultAction(PingPongResultAction action)
 
 void PingPongGameScene::recordIfComplete()
 {
-    try { matchRecorder_.completePingPong(session_); }
+    try {
+        if (!matchRecorder_.completePingPong(session_)) return;
+        try { notifications_.enqueue(achievements_.evaluateAndUnlock(matchRecorder_.profileId())); }
+        catch (const std::exception& error) {
+            resultOverlay_.setWarning("Match saved, but achievements could not be updated.");
+            std::cerr << "GameVerseArenaGUI: Ping Pong achievement evaluation failed: " << error.what() << '\n';
+        }
+    }
     catch (const std::exception& error) {
         resultOverlay_.setWarning("Match complete, but history could not be saved.");
         std::cerr << "GameVerseArenaGUI: Ping Pong history save failed: " << error.what() << '\n';

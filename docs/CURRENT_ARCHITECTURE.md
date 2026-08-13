@@ -12,7 +12,8 @@
 
 - `MainMenuScene`: Play, Profiles, Settings, About, and Exit navigation with keyboard and mouse input.
 - `ProfilesScene`: bounded/scrollable local profile selection plus Create, Rename, Delete, Set Active, View Stats, and Back actions. `ProfileEditOverlay` and `ProfileDeleteOverlay` own transient input and confirmation presentation; all validation and state transitions remain in `ProfileService`.
-- `ProfileStatsScene`: read-only overall and per-game statistics for the selected profile, including the zero-history empty state.
+- `ProfileStatsScene`: read-only overall and per-game statistics for the selected profile, including the zero-history empty state, achievement summary, and navigation to history or achievements.
+- `ProfileAchievementsScene`: profile-scoped achievement cards, All/General/Tic-Tac-Toe/Ping Pong filters, bounded scrolling, first-unlock dates, and history-derived locked progress.
 - `MatchHistoryScene`: newest-first bounded pages with repository-level game/result filters and Previous/Next navigation.
 - `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe and Ping Pong while truthfully identifying the other 13 board games as console-only.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
@@ -27,6 +28,8 @@
 
 `UiButton` provides common bounds, label rendering, hover and selected states, click hit-testing, and delta-time-based visual transitions. `Theme.hpp` centralizes the shell's colors, spacing, type sizes, and animation speed. `AssetManager` loads each required Inter font once, and CMake copies the assets beside the GUI executable.
 
+`AchievementToast` is application-wide presentation over the active scene. Its SFML-independent `AchievementNotificationQueue` displays one newly recognized achievement for 3.5 seconds, accepts delta-time updates and early click dismissal, and preserves multiple unlocks in order without sleeping or playing sound.
+
 ## Local persistence layer
 
 The SQLite-backed persistence module lives under `src/persistence` and links as the SFML-independent `GameVerseArenaPersistence` library. Only `GameVerseArenaGUI` links it; the 14-game `GameVerseArena` console target remains SQLite-independent.
@@ -36,22 +39,31 @@ The SQLite-backed persistence module lives under `src/persistence` and links as 
 - `ProfileRepository` contains all profile and active-selection SQL. User values are bound through prepared statements; no GUI source contains raw SQL.
 - `ProfileService` owns name normalization/validation, uniqueness checks, first-run bootstrap, active-profile changes, and safe delete replacement rules.
 
-Schema v2 is tracked with `PRAGMA user_version`. Version 0 first creates the v1 `profiles` and `app_state` schema, then a transactional v1-to-v2 migration adds `matches`; existing profiles and active selection are never recreated. Version 2 reopens idempotently and unknown future versions fail startup without modification. Foreign keys prevent orphaned active state and `matches.profile_id REFERENCES profiles(id) ON DELETE CASCADE` deliberately removes local history when a profile is deleted.
+Schema v3 is tracked with `PRAGMA user_version`. Version 0 first creates the v1 `profiles` and `app_state` schema, a transactional v1-to-v2 migration adds `matches`, and a transactional v2-to-v3 migration adds `achievement_unlocks`; existing profiles, active selection, and match history are never recreated. Version 3 reopens idempotently and unknown future versions fail startup without modification. Foreign keys prevent orphaned active state. Both `matches.profile_id` and `achievement_unlocks.profile_id` reference `profiles(id) ON DELETE CASCADE`, so profile deletion removes local history and unlock facts.
 
 `matches` stores typed game/mode/result/difficulty keys, both match-time display names/sides, final scores, optional draw count, match format, monotonic `duration_ms`, and UTC epoch-millisecond `started_at`/`completed_at`. Indexes on `(profile_id, completed_at)`, `(profile_id, game_key, completed_at)`, and `(profile_id, result, completed_at)` serve newest-first, game-filter, and result-filter queries.
+
+`achievement_unlocks(profile_id, achievement_key, unlocked_at)` has a composite primary key on `(profile_id, achievement_key)`. It stores only durable first-recognition facts. Progress, match counts, streaks, mark wins, and score-pattern state are not stored in this table.
 
 - `MatchRepository` owns prepared insertion, newest-first pagination, counts, and SQL game/result filters.
 - `MatchService` validates terminal records and profile existence before insertion.
 - `StatisticsRepository` derives overall and per-game aggregates and streaks from history. There are no persistent aggregate counters.
+- `StatisticsRepository` also supplies a compact achievement snapshot: total matches/wins, best streak, per-game wins, Tic-Tac-Toe wins by X/O, and Ping Pong 5-0/5-4 win existence. Startup backfill uses one aggregate query plus one ordered all-profile streak scan rather than a full-history scan per achievement or profile.
+- `AchievementRepository` owns all unlock SQL. `INSERT OR IGNORE` and the composite primary key preserve the first timestamp and provide duplicate protection.
+- `AchievementService` coordinates snapshot evaluation, status/progress views, post-match recognition, and startup backfill. It returns only newly inserted catalogue items for toast presentation.
 - `MatchRecorder` is an SFML-independent completion adapter shared by setup/game scenes. It captures the active profile ID at start, maps pure session winners from that profile's perspective, measures active time with `steady_clock`, and marks a match finalized before its one database attempt.
 
-The completion flow is `setup capture -> pure game/session -> terminal-state mapping -> MatchService -> MatchRepository`. Setup time, result-overlay time, and paused Ping Pong time are excluded. Rematch/New Match resets timing. Abandoning setup/game/library flows invalidates the recorder without a write. Save failure leaves the in-memory result intact, logs context, and shows a non-blocking overlay warning.
+The completion flow is `setup capture -> pure game/session -> terminal-state mapping -> MatchService -> MatchRepository -> AchievementService -> AchievementRepository -> toast queue`. Achievement evaluation occurs only when the recorder reports that the completed-match insert succeeded. Setup time, result-overlay time, and paused Ping Pong time are excluded. Rematch/New Match resets timing. Abandoning setup/game/library flows invalidates the recorder without a write. A history-save failure leaves the in-memory result intact, logs context, shows a non-blocking warning, and skips achievement evaluation.
+
+The project-owned achievement domain lives under `src/achievements`. `AchievementCatalogue` contains the immutable metadata for exactly 12 achievements. `AchievementEvaluator` explicitly evaluates those 12 conditions from an `AchievementSnapshot`; it is intentionally not a generic rule engine. `AchievementProgress` clamps numeric values to their targets, while Clean Sweep and Clutch Finish expose no fake numeric progress. The domain has no SQLite or SFML dependency.
+
+On startup, `AchievementService::backfillAll` loads compact snapshots and existing unlocks in batches, evaluates every profile, and inserts only missing satisfied keys. Backfilled rows use the current UTC recognition time, never a guessed historical completion time. Repeating startup or post-match evaluation inserts nothing new because both the service and database uniqueness reject duplicates.
 
 On first run the service creates exactly one `Player 1` and makes it active. Activating a profile persists its ID and advances `last_used_at`. Deleting an inactive profile leaves the active selection alone; deleting the active profile chooses the most recently used remaining profile; deleting the final profile recreates and activates `Player 1`.
 
-`Application` initializes the database and bootstraps the service before registering scenes. A startup failure is reported to stderr and in a Windows fatal error dialog. Both setup scenes request the active display name on activation and copy it into their editable Player 1 field. That copy is a per-match default only: setup edits never call rename and match results are not stored.
+`Application` initializes the database, bootstraps profiles, and performs achievement backfill before registering scenes. A startup failure is reported to stderr and in a Windows fatal error dialog. Both setup scenes request the active display name on activation and copy it into their editable Player 1 field. That copy is a per-match default only: setup edits never call profile rename, while the completed-match row retains its match-time display name.
 
-`GameVerseArenaPersistenceTests` and `GameVerseArenaMatchHistoryTests` use only temporary injected database files and open no SFML window. They cover schema migration/reopen/version rejection, profiles, validation, inserts, SQL-safe text, filters, pagination, profile isolation/cascade, derived aggregates/streaks, game-result mapping, abandonment, and duplicate finalization.
+`GameVerseArenaPersistenceTests`, `GameVerseArenaMatchHistoryTests`, and `GameVerseArenaAchievementTests` use only temporary injected database files and open no SFML window. Achievement coverage includes v2-to-v3 preservation/reopen/future rejection, repository insertion/duplicate/timestamp/isolation/cascade, all 12 evaluator boundaries, numeric progress and clamping, score/mark polarity, draw-broken streaks, compact batch snapshots, repeated evaluation/backfill idempotency, recognition timestamps, and notification queue order.
 
 ## Graphical Classic Tic-Tac-Toe module
 
@@ -128,7 +140,7 @@ The scoreboard is shared across games during the current application session. It
 
 - The playable board-game user interface and input model remain console-based and synchronous.
 - Classic Tic-Tac-Toe is the graphical turn-based game, Ping Pong is the only graphical arcade game, and the other 13 board games remain console-only.
-- Settings are labeled previews and do not persist or change application behavior. Player profiles, completed matches, and the active selection are persistent local application data.
+- Settings are labeled previews and do not persist or change application behavior. Player profiles, completed matches, first achievement unlock timestamps, and the active selection are persistent local application data; achievement progress remains derived.
 - Ping Pong currently supports local two-player and local Human-vs-Computer play only; it has no audio, controller support, or networking. Completed matches are tracked locally.
 - The shared framework assumes two players taking discrete, alternating turns.
 - Game completion is expressed through `Board<T>` win, loss, and draw queries.

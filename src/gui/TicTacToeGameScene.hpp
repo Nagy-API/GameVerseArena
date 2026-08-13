@@ -7,6 +7,8 @@
 #include "TicTacToeSession.hpp"
 #include "UiButton.hpp"
 #include "MatchRecorder.hpp"
+#include "AchievementService.hpp"
+#include "AchievementNotificationQueue.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Text.hpp>
@@ -17,7 +19,9 @@ class TicTacToeGameScene final : public Scene {
 public:
     TicTacToeGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                        SceneManager& sceneManager, classic_ttt::TicTacToeSession& session,
-                       persistence::MatchRecorder& matchRecorder);
+                       persistence::MatchRecorder& matchRecorder,
+                       persistence::AchievementService& achievements,
+                       achievements::AchievementNotificationQueue& notifications);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -43,6 +47,8 @@ private:
     SceneManager& sceneManager_;
     classic_ttt::TicTacToeSession& session_;
     persistence::MatchRecorder& matchRecorder_;
+    persistence::AchievementService& achievements_;
+    achievements::AchievementNotificationQueue& notifications_;
     classic_ttt::TicTacToeAI ai_;
     const sf::Font& regularFont_;
     const sf::Font& semiboldFont_;

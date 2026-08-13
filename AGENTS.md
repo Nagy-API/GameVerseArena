@@ -91,6 +91,8 @@ The graphical target now embeds SQLite for local player profiles. Keep all SQL i
 
 Completed-match rows are the persistent source of truth for player statistics. Derive statistics from history queries rather than incrementing stored counters. Match writes must occur exactly once at final completion; abandoned or unfinished matches must never be persisted. Game scenes must not contain raw SQL. Every schema change requires a versioned migration plus migration, reopen, future-version, and relevant data-integrity tests.
 
+Player achievements must derive their conditions and progress from authoritative completed-match history/statistics. Never persist progress counters; persist only idempotent first-unlock facts after the matching completed-match write succeeds. Achievement catalogue metadata is immutable project-owned code, not mutable database data. Startup backfill must be idempotent and use compact history queries. Every achievement-related schema migration requires migration, reopen, future-version, cascade, uniqueness, and data-preservation tests.
+
 ---
 
 ## C++ Standards

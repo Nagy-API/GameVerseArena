@@ -212,6 +212,12 @@ void Database::initializeSchema()
         change.commit();
         version = 2;
     }
+    if (version == 2) {
+        auto change = transaction();
+        execute(schema::migrateVersionTwoToThree);
+        change.commit();
+        version = 3;
+    }
     if (version != schema::currentVersion) {
         throw std::runtime_error("Unsupported profile database schema version " + std::to_string(version));
     }

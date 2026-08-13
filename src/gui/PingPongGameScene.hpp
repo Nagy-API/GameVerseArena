@@ -9,6 +9,8 @@
 #include "SceneManager.hpp"
 #include "UiButton.hpp"
 #include "MatchRecorder.hpp"
+#include "AchievementService.hpp"
+#include "AchievementNotificationQueue.hpp"
 
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Keyboard.hpp>
@@ -19,7 +21,9 @@ class PingPongGameScene final : public Scene {
 public:
     PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                       SceneManager& sceneManager, ping_pong::PingPongSession& session,
-                      persistence::MatchRecorder& matchRecorder);
+                      persistence::MatchRecorder& matchRecorder,
+                      persistence::AchievementService& achievements,
+                      achievements::AchievementNotificationQueue& notifications);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -54,6 +58,8 @@ private:
     SceneManager& sceneManager_;
     ping_pong::PingPongSession& session_;
     persistence::MatchRecorder& matchRecorder_;
+    persistence::AchievementService& achievements_;
+    achievements::AchievementNotificationQueue& notifications_;
     ping_pong::PingPongSimulation simulation_;
     ping_pong::PingPongAI ai_;
     const sf::Font& regularFont_;

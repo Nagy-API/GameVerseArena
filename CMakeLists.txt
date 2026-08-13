@@ -76,7 +76,9 @@ add_executable(GameVerseArenaGUI
     "src/gui/PingPongResultOverlay.cpp"
     "src/gui/ProfilesScene.cpp"
     "src/gui/ProfileStatsScene.cpp"
+    "src/gui/ProfileAchievementsScene.cpp"
     "src/gui/MatchHistoryScene.cpp"
+    "src/gui/AchievementToast.cpp"
     "src/gui/ProfileEditOverlay.cpp"
     "src/gui/ProfileDeleteOverlay.cpp"
 )
@@ -93,6 +95,17 @@ target_compile_definitions(GameVerseArenaSQLite PRIVATE
     SQLITE_OMIT_LOAD_EXTENSION
 )
 
+add_library(GameVerseArenaAchievements
+    "src/achievements/AchievementCatalogue.cpp"
+    "src/achievements/AchievementEvaluator.cpp"
+    "src/achievements/AchievementNotificationQueue.cpp"
+)
+
+target_include_directories(GameVerseArenaAchievements PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/achievements"
+)
+target_compile_features(GameVerseArenaAchievements PUBLIC cxx_std_17)
+
 add_library(GameVerseArenaPersistence
     "src/persistence/Database.cpp"
     "src/persistence/DatabasePaths.cpp"
@@ -100,16 +113,24 @@ add_library(GameVerseArenaPersistence
     "src/persistence/MatchRepository.cpp"
     "src/persistence/MatchService.cpp"
     "src/persistence/StatisticsRepository.cpp"
+    "src/persistence/AchievementRepository.cpp"
+    "src/persistence/AchievementService.cpp"
     "src/persistence/ProfileRepository.cpp"
     "src/persistence/ProfileService.cpp"
 )
 
 target_include_directories(GameVerseArenaPersistence PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/persistence"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/achievements"
 )
 
 target_compile_features(GameVerseArenaPersistence PUBLIC cxx_std_17)
-target_link_libraries(GameVerseArenaPersistence PRIVATE GameVerseArenaSQLite)
+target_link_libraries(GameVerseArenaPersistence PUBLIC GameVerseArenaAchievements PRIVATE GameVerseArenaSQLite)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(GameVerseArenaAchievements PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(GameVerseArenaPersistence PRIVATE -Wall -Wextra -pedantic)
+endif()
 
 add_library(GameVerseArenaTicTacToe
     "src/games/classic_tic_tac_toe/TicTacToeBoard.cpp"
@@ -167,6 +188,18 @@ target_link_libraries(GameVerseArenaMatchHistoryTests PRIVATE
     GameVerseArenaPersistence GameVerseArenaTicTacToe GameVerseArenaPingPong)
 target_compile_features(GameVerseArenaMatchHistoryTests PRIVATE cxx_std_17)
 add_test(NAME MatchHistoryTests COMMAND GameVerseArenaMatchHistoryTests)
+
+add_executable(GameVerseArenaAchievementTests
+    "tests/AchievementTests.cpp"
+)
+
+target_include_directories(GameVerseArenaAchievementTests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/achievements"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gui"
+)
+target_link_libraries(GameVerseArenaAchievementTests PRIVATE GameVerseArenaPersistence GameVerseArenaAchievements)
+target_compile_features(GameVerseArenaAchievementTests PRIVATE cxx_std_17)
+add_test(NAME AchievementTests COMMAND GameVerseArenaAchievementTests)
 
 set_target_properties(GameVerseArenaGUI PROPERTIES
     CXX_STANDARD 17
