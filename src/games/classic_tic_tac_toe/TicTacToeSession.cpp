@@ -69,6 +69,7 @@ void TicTacToeSession::rematch()
 
 bool TicTacToeSession::matchFinished() const noexcept
 {
+    if (config_.bestOf == BestOf::Single && score_.draws > 0) return true;
     const auto needed = winsNeeded();
     return score_.xWins >= needed || score_.oWins >= needed;
 }

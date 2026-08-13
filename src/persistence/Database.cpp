@@ -58,6 +58,13 @@ void Statement::bind(int index, const std::string& value)
     }
 }
 
+void Statement::bindNull(int index)
+{
+    if (sqlite3_bind_null(statement_, index) != SQLITE_OK) {
+        throw sqliteError(sqlite3_db_handle(statement_), "Could not bind null value");
+    }
+}
+
 bool Statement::step()
 {
     const int result = sqlite3_step(statement_);
@@ -75,6 +82,11 @@ std::string Statement::text(int column) const
 {
     const auto* value = sqlite3_column_text(statement_, column);
     return value != nullptr ? reinterpret_cast<const char*>(value) : std::string{};
+}
+
+bool Statement::isNull(int column) const
+{
+    return sqlite3_column_type(statement_, column) == SQLITE_NULL;
 }
 
 Transaction::Transaction(Database& database) : database_(&database)
@@ -183,16 +195,26 @@ std::int64_t Database::lastInsertId() const
 
 void Database::initializeSchema()
 {
-    const int version = userVersion();
-    if (version == schema::currentVersion) return;
-    if (version != 0) {
+    int version = userVersion();
+    if (version > schema::currentVersion || version < 0) {
         throw std::runtime_error("Unsupported profile database schema version " + std::to_string(version) +
                                  "; this build supports version " + std::to_string(schema::currentVersion));
     }
-
-    auto change = transaction();
-    execute(schema::createVersionOne);
-    change.commit();
+    if (version == 0) {
+        auto change = transaction();
+        execute(schema::createVersionOne);
+        change.commit();
+        version = 1;
+    }
+    if (version == 1) {
+        auto change = transaction();
+        execute(schema::migrateVersionOneToTwo);
+        change.commit();
+        version = 2;
+    }
+    if (version != schema::currentVersion) {
+        throw std::runtime_error("Unsupported profile database schema version " + std::to_string(version));
+    }
 }
 
 } // namespace persistence

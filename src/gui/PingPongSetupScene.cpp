@@ -22,8 +22,8 @@ std::string visibleName(const std::string& value)
 
 PingPongSetupScene::PingPongSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                                        SceneManager& sceneManager, PingPongSession& session,
-                                       persistence::ProfileService& profileService)
-    : sceneManager_(sceneManager), session_(session), profileService_(profileService),
+                                       persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder)
+    : sceneManager_(sceneManager), session_(session), profileService_(profileService), matchRecorder_(matchRecorder),
       kicker_(semiboldFont, "ARCADE GAMES  /  PING PONG", Theme::labelSize),
       title_(semiboldFont, "Match setup", Theme::pageTitleSize),
       subtitle_(regularFont, "Choose your players and enter a first-to-five real-time match.", Theme::bodySize),
@@ -153,6 +153,7 @@ void PingPongSetupScene::startMatch()
     config.mode = mode_ == 0 ? GameMode::HumanVsHuman : GameMode::HumanVsComputer;
     config.difficulty = static_cast<AIDifficulty>(difficulty_);
     session_.startMatch(config);
+    if (const auto active = profileService_.activeProfile()) matchRecorder_.beginPingPong(*active, session_.config());
     editing_ = false;
     sceneManager_.switchTo(SceneId::PingPongGame);
 }

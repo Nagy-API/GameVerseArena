@@ -116,6 +116,11 @@ void testSession()
     check(session.nextRound() && session.roundNumber() == 2 && session.score().draws == 1,
           "round number advances after a draw while preserving its score");
 
+    config.bestOf = BestOf::Single;
+    session.startNewMatch(config);
+    for (const auto move : drawMoves) check(session.playMove(move), "single draw setup session move");
+    check(session.matchFinished(), "a single-game draw completes the match");
+
     SessionConfig replacement;
     replacement.playerOneName = "  Alice  ";
     replacement.playerTwoName = "";

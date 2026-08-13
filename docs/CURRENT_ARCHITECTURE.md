@@ -11,7 +11,9 @@
 `SceneManager` owns the scenes and changes the active scene without transferring or exposing ownership. Its activation callback lets stateful scenes safely initialize transient work such as an AI-turn timer. Scene switches are synchronous, but the event that requests a switch finishes in the old scene; application-wide key repeat is disabled so a held activation key cannot immediately trigger an overlay or control in the newly active scene. The shell contains:
 
 - `MainMenuScene`: Play, Profiles, Settings, About, and Exit navigation with keyboard and mouse input.
-- `ProfilesScene`: bounded/scrollable local profile selection plus Create, Rename, Delete, Set Active, and Back actions. `ProfileEditOverlay` and `ProfileDeleteOverlay` own transient input and confirmation presentation; all validation and state transitions remain in `ProfileService`.
+- `ProfilesScene`: bounded/scrollable local profile selection plus Create, Rename, Delete, Set Active, View Stats, and Back actions. `ProfileEditOverlay` and `ProfileDeleteOverlay` own transient input and confirmation presentation; all validation and state transitions remain in `ProfileService`.
+- `ProfileStatsScene`: read-only overall and per-game statistics for the selected profile, including the zero-history empty state.
+- `MatchHistoryScene`: newest-first bounded pages with repository-level game/result filters and Previous/Next navigation.
 - `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe and Ping Pong while truthfully identifying the other 13 board games as console-only.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
 - `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
@@ -34,13 +36,22 @@ The SQLite-backed persistence module lives under `src/persistence` and links as 
 - `ProfileRepository` contains all profile and active-selection SQL. User values are bound through prepared statements; no GUI source contains raw SQL.
 - `ProfileService` owns name normalization/validation, uniqueness checks, first-run bootstrap, active-profile changes, and safe delete replacement rules.
 
-Schema v1 is tracked with `PRAGMA user_version`. Version 0 is upgraded transactionally by creating `profiles(id, display_name, created_at, updated_at, last_used_at)` with case-insensitive display-name uniqueness and normalized `app_state(key, profile_id)` storage for the active profile. Version 1 opens normally; unknown future versions fail startup with a clear error instead of being modified. Foreign-key enforcement prevents an orphaned active reference.
+Schema v2 is tracked with `PRAGMA user_version`. Version 0 first creates the v1 `profiles` and `app_state` schema, then a transactional v1-to-v2 migration adds `matches`; existing profiles and active selection are never recreated. Version 2 reopens idempotently and unknown future versions fail startup without modification. Foreign keys prevent orphaned active state and `matches.profile_id REFERENCES profiles(id) ON DELETE CASCADE` deliberately removes local history when a profile is deleted.
+
+`matches` stores typed game/mode/result/difficulty keys, both match-time display names/sides, final scores, optional draw count, match format, monotonic `duration_ms`, and UTC epoch-millisecond `started_at`/`completed_at`. Indexes on `(profile_id, completed_at)`, `(profile_id, game_key, completed_at)`, and `(profile_id, result, completed_at)` serve newest-first, game-filter, and result-filter queries.
+
+- `MatchRepository` owns prepared insertion, newest-first pagination, counts, and SQL game/result filters.
+- `MatchService` validates terminal records and profile existence before insertion.
+- `StatisticsRepository` derives overall and per-game aggregates and streaks from history. There are no persistent aggregate counters.
+- `MatchRecorder` is an SFML-independent completion adapter shared by setup/game scenes. It captures the active profile ID at start, maps pure session winners from that profile's perspective, measures active time with `steady_clock`, and marks a match finalized before its one database attempt.
+
+The completion flow is `setup capture -> pure game/session -> terminal-state mapping -> MatchService -> MatchRepository`. Setup time, result-overlay time, and paused Ping Pong time are excluded. Rematch/New Match resets timing. Abandoning setup/game/library flows invalidates the recorder without a write. Save failure leaves the in-memory result intact, logs context, and shows a non-blocking overlay warning.
 
 On first run the service creates exactly one `Player 1` and makes it active. Activating a profile persists its ID and advances `last_used_at`. Deleting an inactive profile leaves the active selection alone; deleting the active profile chooses the most recently used remaining profile; deleting the final profile recreates and activates `Player 1`.
 
 `Application` initializes the database and bootstraps the service before registering scenes. A startup failure is reported to stderr and in a Windows fatal error dialog. Both setup scenes request the active display name on activation and copy it into their editable Player 1 field. That copy is a per-match default only: setup edits never call rename and match results are not stored.
 
-`GameVerseArenaPersistenceTests` links no SFML and uses only temporary injected database files. It covers schema lifecycle/version rejection, foreign keys, bootstrap idempotence, validation, duplicate handling, timestamps, active persistence and deletion rules, path isolation, clean reopen, and SQL-safety names.
+`GameVerseArenaPersistenceTests` and `GameVerseArenaMatchHistoryTests` use only temporary injected database files and open no SFML window. They cover schema migration/reopen/version rejection, profiles, validation, inserts, SQL-safe text, filters, pagination, profile isolation/cascade, derived aggregates/streaks, game-result mapping, abandonment, and duplicate finalization.
 
 ## Graphical Classic Tic-Tac-Toe module
 
@@ -117,8 +128,8 @@ The scoreboard is shared across games during the current application session. It
 
 - The playable board-game user interface and input model remain console-based and synchronous.
 - Classic Tic-Tac-Toe is the graphical turn-based game, Ping Pong is the only graphical arcade game, and the other 13 board games remain console-only.
-- Settings are labeled previews and do not persist or change application behavior. Player profiles and the active selection are the only persistent application data.
-- Ping Pong currently supports local two-player and local Human-vs-Computer play only; it has no audio, controller support, networking, or persistent match history.
+- Settings are labeled previews and do not persist or change application behavior. Player profiles, completed matches, and the active selection are persistent local application data.
+- Ping Pong currently supports local two-player and local Human-vs-Computer play only; it has no audio, controller support, or networking. Completed matches are tracked locally.
 - The shared framework assumes two players taking discrete, alternating turns.
 - Game completion is expressed through `Board<T>` win, loss, and draw queries.
 - Individual modules contain their existing rule, presentation, input, and computer-player behavior; these have not been reorganized.

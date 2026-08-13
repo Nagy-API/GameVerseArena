@@ -21,9 +21,11 @@ public:
 
     void bind(int index, std::int64_t value);
     void bind(int index, const std::string& value);
+    void bindNull(int index);
     bool step();
     std::int64_t integer(int column) const;
     std::string text(int column) const;
+    bool isNull(int column) const;
 
 private:
     sqlite3_stmt* statement_{};

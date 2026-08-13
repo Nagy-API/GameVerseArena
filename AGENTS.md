@@ -89,6 +89,8 @@ SFML 3.1.0 is approved only for the graphical target. Do not introduce another g
 
 The graphical target now embeds SQLite for local player profiles. Keep all SQL inside the persistence layer; GUI scenes must use the profile service rather than database APIs. Schema changes require an explicit migration and `PRAGMA user_version` bump. Persistence tests must use injected temporary database paths, the console target must remain SQLite-independent, and runtime database files must never be stored in the repository or build directories.
 
+Completed-match rows are the persistent source of truth for player statistics. Derive statistics from history queries rather than incrementing stored counters. Match writes must occur exactly once at final completion; abandoned or unfinished matches must never be persisted. Game scenes must not contain raw SQL. Every schema change requires a versioned migration plus migration, reopen, future-version, and relevant data-integrity tests.
+
 ---
 
 ## C++ Standards

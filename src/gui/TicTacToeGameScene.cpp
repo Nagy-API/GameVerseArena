@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <string>
 
 using namespace classic_ttt;
@@ -24,8 +25,9 @@ std::string matchLength(BestOf bestOf)
 } // namespace
 
 TicTacToeGameScene::TicTacToeGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                       SceneManager& sceneManager, TicTacToeSession& session)
-    : sceneManager_(sceneManager), session_(session), regularFont_(regularFont), semiboldFont_(semiboldFont),
+                                       SceneManager& sceneManager, TicTacToeSession& session,
+                                       persistence::MatchRecorder& matchRecorder)
+    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), regularFont_(regularFont), semiboldFont_(semiboldFont),
       backButton_(semiboldFont, "Back to Library", {190.f, 50.f}),
       restartButton_(semiboldFont, "Restart Round", {190.f, 50.f}),
       newMatchButton_(semiboldFont, "New Match", {190.f, 50.f}),
@@ -54,7 +56,7 @@ void TicTacToeGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
             else if (key->code == sf::Keyboard::Key::Left || key->code == sf::Keyboard::Key::Right || key->code == sf::Keyboard::Key::Tab) {
                 exitYesSelected_ = !exitYesSelected_;
             } else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) {
-                if (exitYesSelected_) { cancelAI(); sceneManager_.switchTo(SceneId::GameLibrary); }
+                if (exitYesSelected_) { cancelAI(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
                 else exitConfirmation_ = false;
             }
         }
@@ -68,7 +70,7 @@ void TicTacToeGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
         if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
             click && click->button == sf::Mouse::Button::Left) {
             const auto point = window.mapPixelToCoords(click->position);
-            if (exitYesButton_.contains(point)) { cancelAI(); sceneManager_.switchTo(SceneId::GameLibrary); }
+            if (exitYesButton_.contains(point)) { cancelAI(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
             else if (exitNoButton_.contains(point)) exitConfirmation_ = false;
         }
         updateButtonStates();
@@ -98,7 +100,7 @@ void TicTacToeGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
         const auto point = window.mapPixelToCoords(click->position);
         if (backButton_.contains(point)) requestLibraryExit();
         else if (restartButton_.contains(point)) { session_.restartRound(); resetVisualState(); scheduleAI(); }
-        else if (newMatchButton_.contains(point)) { session_.rematch(); resetVisualState(); scheduleAI(); }
+        else if (newMatchButton_.contains(point)) { session_.rematch(); matchRecorder_.restartTicTacToe(session_.config()); resetVisualState(); scheduleAI(); }
         else if (const auto position = cellAt(point)) tryMove(*position);
     }
 }
@@ -188,7 +190,7 @@ void TicTacToeGameScene::tryMove(Position position)
     if (!humanMayPlay() || !session_.playMove(position)) return;
     lastMove_ = position;
     markAnimation_ = 0.f;
-    if (session_.board().status() != GameStatus::InProgress) resultOverlay_.show(session_);
+    if (session_.board().status() != GameStatus::InProgress) { resultOverlay_.show(session_); recordIfComplete(); }
     else if (session_.isComputerTurn()) scheduleAI();
 }
 
@@ -212,7 +214,7 @@ void TicTacToeGameScene::performAI()
     if (!move || !session_.playMove(*move)) return;
     lastMove_ = *move;
     markAnimation_ = 0.f;
-    if (session_.board().status() != GameStatus::InProgress) resultOverlay_.show(session_);
+    if (session_.board().status() != GameStatus::InProgress) { resultOverlay_.show(session_); recordIfComplete(); }
 }
 
 void TicTacToeGameScene::handleResultAction(TicTacToeResultAction action)
@@ -221,9 +223,9 @@ void TicTacToeGameScene::handleResultAction(TicTacToeResultAction action)
     resultOverlay_.hide(); cancelAI();
     if (action == TicTacToeResultAction::NextRound) session_.nextRound();
     else if (action == TicTacToeResultAction::RestartRound) session_.restartRound();
-    else if (action == TicTacToeResultAction::Rematch) session_.rematch();
-    else if (action == TicTacToeResultAction::NewSetup) { sceneManager_.switchTo(SceneId::TicTacToeSetup); return; }
-    else if (action == TicTacToeResultAction::ReturnToLibrary) { sceneManager_.switchTo(SceneId::GameLibrary); return; }
+    else if (action == TicTacToeResultAction::Rematch) { session_.rematch(); matchRecorder_.restartTicTacToe(session_.config()); }
+    else if (action == TicTacToeResultAction::NewSetup) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::TicTacToeSetup); return; }
+    else if (action == TicTacToeResultAction::ReturnToLibrary) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); return; }
     resetVisualState(); scheduleAI();
 }
 
@@ -246,6 +248,16 @@ void TicTacToeGameScene::updateButtonStates()
 {
     exitYesButton_.setSelected(exitConfirmation_ && exitYesSelected_);
     exitNoButton_.setSelected(exitConfirmation_ && !exitYesSelected_);
+}
+
+void TicTacToeGameScene::recordIfComplete()
+{
+    if (!session_.matchFinished()) return;
+    try { matchRecorder_.completeTicTacToe(session_); }
+    catch (const std::exception& error) {
+        resultOverlay_.setWarning("Match complete, but history could not be saved.");
+        std::cerr << "GameVerseArenaGUI: Tic-Tac-Toe history save failed: " << error.what() << '\n';
+    }
 }
 
 void TicTacToeGameScene::drawBoard(sf::RenderTarget& target) const

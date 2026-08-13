@@ -6,6 +6,10 @@
 #include "PingPongSession.hpp"
 #include "Database.hpp"
 #include "ProfileService.hpp"
+#include "MatchService.hpp"
+#include "MatchRecorder.hpp"
+#include "MatchRepository.hpp"
+#include "StatisticsRepository.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -32,4 +36,10 @@ private:
     ping_pong::PingPongSession pingPongSession_;
     std::unique_ptr<persistence::Database> database_;
     std::unique_ptr<persistence::ProfileService> profileService_;
+    std::unique_ptr<persistence::MatchService> matchService_;
+    std::unique_ptr<persistence::MatchRecorder> ticTacToeRecorder_;
+    std::unique_ptr<persistence::MatchRecorder> pingPongRecorder_;
+    std::unique_ptr<persistence::MatchRepository> matchRepository_;
+    std::unique_ptr<persistence::StatisticsRepository> statisticsRepository_;
+    std::int64_t selectedStatsProfileId_{};
 };

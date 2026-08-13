@@ -13,7 +13,7 @@ TicTacToeResultOverlay::TicTacToeResultOverlay(const sf::Font& regularFont, cons
     : shade_(Theme::logicalSize), panel_({700.f, 450.f}),
       eyebrow_(semiboldFont, "ROUND COMPLETE", Theme::labelSize),
       title_(semiboldFont, "", 40), roundResult_(regularFont, "", Theme::bodySize),
-      score_(semiboldFont, "", 20),
+      score_(semiboldFont, "", 20), warning_(regularFont, "", 14),
       buttons_{UiButton(semiboldFont, "", {410.f, 54.f}), UiButton(semiboldFont, "", {410.f, 54.f}),
                UiButton(semiboldFont, "", {410.f, 54.f})}
 {
@@ -26,6 +26,7 @@ TicTacToeResultOverlay::TicTacToeResultOverlay(const sf::Font& regularFont, cons
     title_.setPosition({340.f, 205.f}); title_.setFillColor(Theme::textPrimary);
     roundResult_.setPosition({340.f, 265.f}); roundResult_.setFillColor(Theme::textSecondary);
     score_.setPosition({340.f, 302.f}); score_.setFillColor(Theme::textPrimary);
+    warning_.setPosition({340.f, 330.f}); warning_.setFillColor(Theme::warning);
     for (std::size_t index = 0; index < buttons_.size(); ++index)
         buttons_[index].setPosition({435.f, 355.f + static_cast<float>(index) * 64.f});
 }
@@ -33,12 +34,14 @@ TicTacToeResultOverlay::TicTacToeResultOverlay(const sf::Font& regularFont, cons
 void TicTacToeResultOverlay::show(const TicTacToeSession& session)
 {
     visible_ = true;
+    warning_.setString("");
     matchFinished_ = session.matchFinished();
     selected_ = 0;
     const auto status = session.board().status();
     if (status == GameStatus::Draw) {
         title_.setString("It's a draw");
-        roundResult_.setString("A balanced round. The match continues without awarding a win.");
+        roundResult_.setString(matchFinished_ ? "The single game ends in a draw."
+                                              : "A balanced round. The match continues without awarding a win.");
     } else {
         const Cell winner = status == GameStatus::XWon ? Cell::X : Cell::O;
         title_.setString(session.playerName(winner) + " wins the round");
@@ -50,7 +53,7 @@ void TicTacToeResultOverlay::show(const TicTacToeSession& session)
                      "     Draws " + std::to_string(points.draws));
     eyebrow_.setString(matchFinished_ ? "MATCH COMPLETE" : "ROUND COMPLETE");
     if (matchFinished_) {
-        roundResult_.setString(roundResult_.getString() + "  |  Match winner");
+        if (status != GameStatus::Draw) roundResult_.setString(roundResult_.getString() + "  |  Match winner");
         buttons_[0].setText("Rematch"); buttons_[1].setText("New Setup");
     } else {
         buttons_[0].setText("Next Round"); buttons_[1].setText("Restart Round");
@@ -93,7 +96,7 @@ void TicTacToeResultOverlay::draw(sf::RenderTarget& target) const
 {
     if (!visible_) return;
     target.draw(shade_); target.draw(panel_); target.draw(eyebrow_); target.draw(title_);
-    target.draw(roundResult_); target.draw(score_);
+    target.draw(roundResult_); target.draw(score_); target.draw(warning_);
     for (const auto& button : buttons_) button.draw(target);
 }
 

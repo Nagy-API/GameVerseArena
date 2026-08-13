@@ -10,7 +10,7 @@ using namespace ping_pong;
 PingPongResultOverlay::PingPongResultOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont)
     : shade_(Theme::logicalSize), panel_({700.f, 450.f}), eyebrow_(semiboldFont, "MATCH COMPLETE", Theme::labelSize),
       title_(semiboldFont, "", 42), score_(semiboldFont, "", 26),
-      message_(regularFont, "First to five claims the arena.", Theme::bodySize),
+      message_(regularFont, "First to five claims the arena.", Theme::bodySize), warning_(regularFont, "", 14),
       buttons_{UiButton(semiboldFont, "Rematch", {410.f, 54.f}),
                UiButton(semiboldFont, "New Setup", {410.f, 54.f}),
                UiButton(semiboldFont, "Return to Library", {410.f, 54.f})}
@@ -21,13 +21,14 @@ PingPongResultOverlay::PingPongResultOverlay(const sf::Font& regularFont, const 
     title_.setPosition({340.f, 205.f}); title_.setFillColor(Theme::textPrimary);
     score_.setPosition({340.f, 270.f}); score_.setFillColor(Theme::textPrimary);
     message_.setPosition({340.f, 310.f}); message_.setFillColor(Theme::textSecondary);
+    warning_.setPosition({340.f, 334.f}); warning_.setFillColor(Theme::warning);
     for (std::size_t index = 0; index < buttons_.size(); ++index)
         buttons_[index].setPosition({435.f, 355.f + static_cast<float>(index) * 64.f});
 }
 
 void PingPongResultOverlay::show(const PingPongSession& session)
 {
-    visible_ = true; select(0);
+    visible_ = true; warning_.setString(""); select(0);
     const Side winner = session.winner().value_or(Side::Left);
     title_.setString(session.playerName(winner) + " wins");
     score_.setString(session.playerName(Side::Left) + "  " + std::to_string(session.score().left) + "  -  " +
@@ -62,7 +63,7 @@ void PingPongResultOverlay::update(sf::Time deltaTime) { if (visible_) for (auto
 void PingPongResultOverlay::draw(sf::RenderTarget& target) const
 {
     if (!visible_) return;
-    target.draw(shade_); target.draw(panel_); target.draw(eyebrow_); target.draw(title_); target.draw(score_); target.draw(message_);
+    target.draw(shade_); target.draw(panel_); target.draw(eyebrow_); target.draw(title_); target.draw(score_); target.draw(message_); target.draw(warning_);
     for (const auto& button : buttons_) button.draw(target);
 }
 void PingPongResultOverlay::select(std::size_t index)

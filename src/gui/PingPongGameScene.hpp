@@ -8,6 +8,7 @@
 #include "Scene.hpp"
 #include "SceneManager.hpp"
 #include "UiButton.hpp"
+#include "MatchRecorder.hpp"
 
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Keyboard.hpp>
@@ -17,7 +18,8 @@
 class PingPongGameScene final : public Scene {
 public:
     PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                      SceneManager& sceneManager, ping_pong::PingPongSession& session);
+                      SceneManager& sceneManager, ping_pong::PingPongSession& session,
+                      persistence::MatchRecorder& matchRecorder);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -41,6 +43,7 @@ private:
     void restartMatch();
     void handlePauseAction(PingPongPauseAction action);
     void handleResultAction(PingPongResultAction action);
+    void recordIfComplete();
     void drawPlayfield(sf::RenderTarget& target) const;
     void drawCentered(sf::RenderTarget& target, const std::string& value, sf::Vector2f center,
                       unsigned int size, const sf::Color& color, bool strong = false) const;
@@ -50,6 +53,7 @@ private:
 
     SceneManager& sceneManager_;
     ping_pong::PingPongSession& session_;
+    persistence::MatchRecorder& matchRecorder_;
     ping_pong::PingPongSimulation simulation_;
     ping_pong::PingPongAI ai_;
     const sf::Font& regularFont_;

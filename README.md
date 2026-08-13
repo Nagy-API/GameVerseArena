@@ -3,7 +3,7 @@
 GameVerseArena is a C++17 games platform with two independently buildable applications:
 
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
-- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, a game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
+- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history and statistics, a game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
 
 Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
@@ -99,7 +99,19 @@ Choose **Profiles** from the main menu to create, rename, delete, and select loc
 
 The active profile persists across application restarts and supplies the initial Player 1 name in both Classic Tic-Tac-Toe and Ping Pong setup. That setup field remains freely editable for each match; editing it affects only the match and never renames the stored profile. Deleting the active profile automatically selects the most recently used remaining profile. Deleting the last profile safely recreates and activates `Player 1`.
 
-On Windows, profile data is stored at `%LOCALAPPDATA%\GameVerseArena\gameverse.db`. Other platforms use `$XDG_DATA_HOME/GameVerseArena/gameverse.db`, then `$HOME/.local/share/GameVerseArena/gameverse.db`, with the system temporary directory as a final fallback. Data is local to the machine. Match history, statistics, achievements, settings persistence, and cloud synchronization are not implemented.
+On Windows, profile data is stored at `%LOCALAPPDATA%\GameVerseArena\gameverse.db`. Other platforms use `$XDG_DATA_HOME/GameVerseArena/gameverse.db`, then `$HOME/.local/share/GameVerseArena/gameverse.db`, with the system temporary directory as a final fallback. Data is local to the machine. Achievements, settings persistence, and cloud synchronization are not implemented.
+
+## Match history and statistics
+
+Select a profile under **Profiles**, then choose **View Stats**. The statistics view shows overall results, play time, last-played time, current and best win streaks, and focused Classic Tic-Tac-Toe and Ping Pong totals. **Recent Matches** opens a bounded, newest-first history with game and result filters plus Previous/Next pagination.
+
+Only graphical Classic Tic-Tac-Toe and graphical Ping Pong are tracked. The persistent owner is the active profile captured when the match starts; editing Player 1's match-time display name does not change ownership. Guests and computers never receive hidden profiles. Human-vs-Computer results are stored from the active human profile's perspective.
+
+One row is written only when a complete Single Game, Best of 3, Best of 5, or first-to-5 Ping Pong match reaches its final result. Tic-Tac-Toe rounds are not separate history rows. Abandoned matches, incomplete restarts, setup screens, and Return-to-Library before completion are not recorded. A focused completion guard permits one persistence attempt per match even when overlays keep updating or receive repeated input.
+
+Statistics are always recomputed from completed match history; profile rows contain no duplicated win/loss counters. Win rate is wins divided by all completed matches, including draws in the denominator. A loss or draw breaks a win streak. Deleting a profile cascades deletion to its local history.
+
+Schema version 2 stores UTC epoch-millisecond start/completion timestamps and a monotonic active duration. Setup and result-overlay time are excluded, and paused Ping Pong time is excluded. Three history indexes support newest-first profile pages and SQL game/result filters without loading an unbounded list.
 
 For isolated startup testing, the GUI accepts `--database <path>`. This explicitly injected path should be used for destructive tests so real profile data is never touched.
 
@@ -124,7 +136,7 @@ Choose **Play**, select **Classic Tic-Tac-Toe**, complete Player Setup, and star
 
 Setup is fully keyboard accessible: use Up/Down or Tab to move, Left/Right to change choices, Enter to edit names or activate a control, Backspace to edit, and Escape to go back. During a match, use the arrow keys to select a board cell and Enter or Space to play it. Mouse hover and click are supported throughout. Escape or **Back to Library** opens a confirmation before discarding an active in-memory match.
 
-The active profile provides Player 1's initial setup name. Match-specific edits and results are not persisted.
+The active profile provides Player 1's initial setup name. Match-specific display-name edits are preserved in history while ownership remains tied to the captured profile ID.
 
 ## Ping Pong in the GUI
 

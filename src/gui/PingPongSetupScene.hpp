@@ -5,6 +5,7 @@
 #include "SceneManager.hpp"
 #include "UiButton.hpp"
 #include "ProfileService.hpp"
+#include "MatchRecorder.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Text.hpp>
@@ -16,7 +17,7 @@ class PingPongSetupScene final : public Scene {
 public:
     PingPongSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                        SceneManager& sceneManager, ping_pong::PingPongSession& session,
-                       persistence::ProfileService& profileService);
+                       persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -39,6 +40,7 @@ private:
     SceneManager& sceneManager_;
     ping_pong::PingPongSession& session_;
     persistence::ProfileService& profileService_;
+    persistence::MatchRecorder& matchRecorder_;
     sf::Text kicker_;
     sf::Text title_;
     sf::Text subtitle_;

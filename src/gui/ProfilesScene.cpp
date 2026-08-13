@@ -9,8 +9,9 @@
 #include <string>
 
 ProfilesScene::ProfilesScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                             SceneManager& sceneManager, persistence::ProfileService& profileService)
-    : sceneManager_(sceneManager), profileService_(profileService), regularFont_(regularFont),
+                             SceneManager& sceneManager, persistence::ProfileService& profileService,
+                             std::int64_t& selectedStatsProfileId)
+    : sceneManager_(sceneManager), profileService_(profileService), selectedStatsProfileId_(selectedStatsProfileId), regularFont_(regularFont),
       kicker_(semiboldFont, "LOCAL PLAYERS", Theme::labelSize),
       title_(semiboldFont, "Player Profiles", Theme::pageTitleSize),
       subtitle_(regularFont, "Choose the local name used as Player 1's default in graphical games.", Theme::bodySize),
@@ -20,6 +21,7 @@ ProfilesScene::ProfilesScene(const sf::Font& regularFont, const sf::Font& semibo
                UiButton(semiboldFont, "Rename", {318.f, 56.f}),
                UiButton(semiboldFont, "Delete", {318.f, 56.f}),
                UiButton(semiboldFont, "Set Active", {318.f, 56.f}),
+               UiButton(semiboldFont, "View Stats", {318.f, 56.f}),
                UiButton(semiboldFont, "Back", {318.f, 56.f})},
       editOverlay_(regularFont, semiboldFont), deleteOverlay_(regularFont, semiboldFont)
 {
@@ -40,7 +42,7 @@ ProfilesScene::ProfilesScene(const sf::Font& regularFont, const sf::Font& semibo
         badges_.back().setFillColor(Theme::secondary);
     }
     for (std::size_t index = 0; index < actionCount; ++index) {
-        actions_[index].setPosition({890.f, 190.f + static_cast<float>(index) * 74.f});
+        actions_[index].setPosition({890.f, 160.f + static_cast<float>(index) * 68.f});
     }
     refresh();
 }
@@ -166,7 +168,10 @@ void ProfilesScene::activateAction(std::size_t action)
         pendingProfileId_ = selected->id; deleteOverlay_.open(selected->displayName, selectedIsActive());
     } else if (action == 3 && selected.has_value()) {
         profileService_.setActiveProfile(selected->id); reload(selected->id);
-    } else if (action == 4) {
+    } else if (action == 4 && selected.has_value()) {
+        selectedStatsProfileId_ = selected->id;
+        sceneManager_.switchTo(SceneId::ProfileStats);
+    } else if (action == 5) {
         sceneManager_.switchTo(SceneId::MainMenu);
     }
 }

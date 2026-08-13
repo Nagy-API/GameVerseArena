@@ -10,13 +10,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <string>
 
 using namespace ping_pong;
 
 PingPongGameScene::PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                     SceneManager& sceneManager, PingPongSession& session)
-    : sceneManager_(sceneManager), session_(session), regularFont_(regularFont), semiboldFont_(semiboldFont),
+                                     SceneManager& sceneManager, PingPongSession& session,
+                                     persistence::MatchRecorder& matchRecorder)
+    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), regularFont_(regularFont), semiboldFont_(semiboldFont),
       pauseButton_(semiboldFont, "Pause", {150.f, 48.f}),
       pauseOverlay_(regularFont, semiboldFont), resultOverlay_(regularFont, semiboldFont)
 {
@@ -78,7 +80,7 @@ void PingPongGameScene::update(sf::Time deltaTime)
 
         if (const auto scorer = simulation_.step(fixedStep, controlsForStep(fixedStep))) {
             session_.awardPoint(*scorer);
-            if (session_.matchFinished()) resultOverlay_.show(session_);
+            if (session_.matchFinished()) { resultOverlay_.show(session_); recordIfComplete(); }
         }
         trail_.push_back(simulation_.state().ball.position);
         while (trail_.size() > 8) trail_.pop_front();
@@ -168,6 +170,7 @@ ControlInput PingPongGameScene::controlsForStep(double seconds)
 void PingPongGameScene::setPaused(bool paused)
 {
     paused_ = paused;
+    if (paused_) matchRecorder_.pause(); else matchRecorder_.resume();
     clearHeldInput();
     accumulator_ = 0.0;
     if (paused_) pauseOverlay_.resetSelection();
@@ -176,6 +179,7 @@ void PingPongGameScene::setPaused(bool paused)
 void PingPongGameScene::restartMatch()
 {
     session_.rematch();
+    matchRecorder_.restartPingPong(session_.config());
     simulation_.resetForServe();
     session_.consumePointResetRequest();
     ai_.reset(); trail_.clear(); clearHeldInput(); accumulator_ = 0.0;
@@ -186,15 +190,24 @@ void PingPongGameScene::handlePauseAction(PingPongPauseAction action)
 {
     if (action == PingPongPauseAction::Resume) setPaused(false);
     else if (action == PingPongPauseAction::RestartMatch) restartMatch();
-    else if (action == PingPongPauseAction::NewSetup) { clearHeldInput(); sceneManager_.switchTo(SceneId::PingPongSetup); }
-    else if (action == PingPongPauseAction::ReturnToLibrary) { clearHeldInput(); sceneManager_.switchTo(SceneId::GameLibrary); }
+    else if (action == PingPongPauseAction::NewSetup) { clearHeldInput(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::PingPongSetup); }
+    else if (action == PingPongPauseAction::ReturnToLibrary) { clearHeldInput(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
 }
 
 void PingPongGameScene::handleResultAction(PingPongResultAction action)
 {
     if (action == PingPongResultAction::Rematch) restartMatch();
-    else if (action == PingPongResultAction::NewSetup) sceneManager_.switchTo(SceneId::PingPongSetup);
-    else if (action == PingPongResultAction::ReturnToLibrary) sceneManager_.switchTo(SceneId::GameLibrary);
+    else if (action == PingPongResultAction::NewSetup) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::PingPongSetup); }
+    else if (action == PingPongResultAction::ReturnToLibrary) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
+}
+
+void PingPongGameScene::recordIfComplete()
+{
+    try { matchRecorder_.completePingPong(session_); }
+    catch (const std::exception& error) {
+        resultOverlay_.setWarning("Match complete, but history could not be saved.");
+        std::cerr << "GameVerseArenaGUI: Ping Pong history save failed: " << error.what() << '\n';
+    }
 }
 
 void PingPongGameScene::drawPlayfield(sf::RenderTarget& target) const

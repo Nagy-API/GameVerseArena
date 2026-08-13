@@ -9,6 +9,7 @@
 #include <SFML/Window/Event.hpp>
 
 #include <array>
+#include <string>
 
 enum class PingPongResultAction { None, Rematch, NewSetup, ReturnToLibrary };
 
@@ -18,6 +19,7 @@ public:
     void show(const ping_pong::PingPongSession& session);
     void hide() noexcept { visible_ = false; }
     bool visible() const noexcept { return visible_; }
+    void setWarning(const std::string& warning) { warning_.setString(warning); }
     PingPongResultAction handleEvent(const sf::Event& event, sf::RenderWindow& window);
     void update(sf::Time deltaTime);
     void draw(sf::RenderTarget& target) const;
@@ -30,6 +32,7 @@ private:
     sf::Text title_;
     sf::Text score_;
     sf::Text message_;
+    sf::Text warning_;
     std::array<UiButton, 3> buttons_;
     std::size_t selected_{};
     bool visible_{false};

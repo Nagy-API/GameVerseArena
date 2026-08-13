@@ -9,6 +9,8 @@
 enum class SceneId : std::size_t {
     MainMenu,
     Profiles,
+    ProfileStats,
+    MatchHistory,
     GameLibrary,
     TicTacToeSetup,
     TicTacToeGame,

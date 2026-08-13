@@ -18,7 +18,8 @@
 class ProfilesScene final : public Scene {
 public:
     ProfilesScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                  SceneManager& sceneManager, persistence::ProfileService& profileService);
+                  SceneManager& sceneManager, persistence::ProfileService& profileService,
+                  std::int64_t& selectedStatsProfileId);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -28,7 +29,7 @@ public:
 
 private:
     static constexpr std::size_t visibleCount = 6;
-    static constexpr std::size_t actionCount = 5;
+    static constexpr std::size_t actionCount = 6;
 
     void moveProfileSelection(int offset);
     void moveActionSelection(int offset);
@@ -40,6 +41,7 @@ private:
 
     SceneManager& sceneManager_;
     persistence::ProfileService& profileService_;
+    std::int64_t& selectedStatsProfileId_;
     const sf::Font& regularFont_;
     sf::Text kicker_;
     sf::Text title_;

@@ -57,13 +57,13 @@ void testDatabaseSchema(const std::filesystem::path& directory)
     const auto path = directory / "schema.db";
     {
         persistence::Database database(path);
-        check(database.userVersion() == 1, "new database creates schema version 1");
+        check(database.userVersion() == 2, "new database creates schema version 2");
         check(database.foreignKeysEnabled(), "foreign key enforcement is enabled");
         database.execute("CREATE TABLE schema_probe(value INTEGER);");
     }
     {
         persistence::Database database(path);
-        check(database.userVersion() == 1, "version 1 database reopens");
+        check(database.userVersion() == 2, "version 2 database reopens");
         auto statement = database.prepare("SELECT COUNT(*) FROM sqlite_master WHERE name = 'schema_probe';");
         check(statement.step() && statement.integer(0) == 1, "clean close and reopen preserves database");
     }
@@ -71,13 +71,13 @@ void testDatabaseSchema(const std::filesystem::path& directory)
     const auto futurePath = directory / "future.db";
     {
         persistence::Database database(futurePath);
-        database.execute("PRAGMA user_version = 2;");
+        database.execute("PRAGMA user_version = 3;");
     }
     try {
         persistence::Database unsupported(futurePath);
         check(false, "unsupported future schema fails safely");
     } catch (const std::runtime_error& error) {
-        check(std::string(error.what()).find("Unsupported profile database schema version 2") != std::string::npos,
+        check(std::string(error.what()).find("Unsupported profile database schema version 3") != std::string::npos,
               "unsupported future schema reports its version");
     }
 }

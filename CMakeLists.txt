@@ -75,6 +75,8 @@ add_executable(GameVerseArenaGUI
     "src/gui/PingPongPauseOverlay.cpp"
     "src/gui/PingPongResultOverlay.cpp"
     "src/gui/ProfilesScene.cpp"
+    "src/gui/ProfileStatsScene.cpp"
+    "src/gui/MatchHistoryScene.cpp"
     "src/gui/ProfileEditOverlay.cpp"
     "src/gui/ProfileDeleteOverlay.cpp"
 )
@@ -94,6 +96,10 @@ target_compile_definitions(GameVerseArenaSQLite PRIVATE
 add_library(GameVerseArenaPersistence
     "src/persistence/Database.cpp"
     "src/persistence/DatabasePaths.cpp"
+    "src/persistence/MatchTypes.cpp"
+    "src/persistence/MatchRepository.cpp"
+    "src/persistence/MatchService.cpp"
+    "src/persistence/StatisticsRepository.cpp"
     "src/persistence/ProfileRepository.cpp"
     "src/persistence/ProfileService.cpp"
 )
@@ -152,6 +158,15 @@ add_executable(GameVerseArenaPersistenceTests
 target_link_libraries(GameVerseArenaPersistenceTests PRIVATE GameVerseArenaPersistence)
 target_compile_features(GameVerseArenaPersistenceTests PRIVATE cxx_std_17)
 add_test(NAME PersistenceTests COMMAND GameVerseArenaPersistenceTests)
+
+add_executable(GameVerseArenaMatchHistoryTests
+    "tests/MatchHistoryTests.cpp"
+)
+
+target_link_libraries(GameVerseArenaMatchHistoryTests PRIVATE
+    GameVerseArenaPersistence GameVerseArenaTicTacToe GameVerseArenaPingPong)
+target_compile_features(GameVerseArenaMatchHistoryTests PRIVATE cxx_std_17)
+add_test(NAME MatchHistoryTests COMMAND GameVerseArenaMatchHistoryTests)
 
 set_target_properties(GameVerseArenaGUI PROPERTIES
     CXX_STANDARD 17

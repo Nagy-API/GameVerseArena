@@ -5,6 +5,7 @@
 #include "TicTacToeSession.hpp"
 #include "UiButton.hpp"
 #include "ProfileService.hpp"
+#include "MatchRecorder.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Text.hpp>
@@ -17,7 +18,7 @@ class TicTacToeSetupScene final : public Scene {
 public:
     TicTacToeSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                         SceneManager& sceneManager, classic_ttt::TicTacToeSession& session,
-                        persistence::ProfileService& profileService);
+                        persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -40,6 +41,7 @@ private:
     SceneManager& sceneManager_;
     classic_ttt::TicTacToeSession& session_;
     persistence::ProfileService& profileService_;
+    persistence::MatchRecorder& matchRecorder_;
     const sf::Font& regularFont_;
     const sf::Font& semiboldFont_;
     sf::Text kicker_;

@@ -9,6 +9,7 @@
 #include <SFML/Window/Event.hpp>
 
 #include <array>
+#include <string>
 
 enum class TicTacToeResultAction { None, NextRound, RestartRound, Rematch, NewSetup, ReturnToLibrary };
 
@@ -18,6 +19,7 @@ public:
 
     void show(const classic_ttt::TicTacToeSession& session);
     void hide() noexcept { visible_ = false; }
+    void setWarning(const std::string& warning) { warning_.setString(warning); }
     bool visible() const noexcept { return visible_; }
     TicTacToeResultAction handleEvent(const sf::Event& event, sf::RenderWindow& window);
     void update(sf::Time deltaTime);
@@ -33,6 +35,7 @@ private:
     sf::Text title_;
     sf::Text roundResult_;
     sf::Text score_;
+    sf::Text warning_;
     std::array<UiButton, 3> buttons_;
     std::size_t selected_{};
     bool visible_{false};

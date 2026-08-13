@@ -26,8 +26,8 @@ std::string visibleName(const std::string& value)
 
 TicTacToeSetupScene::TicTacToeSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
                                          SceneManager& sceneManager, TicTacToeSession& session,
-                                         persistence::ProfileService& profileService)
-    : sceneManager_(sceneManager), session_(session), profileService_(profileService),
+                                         persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder)
+    : sceneManager_(sceneManager), session_(session), profileService_(profileService), matchRecorder_(matchRecorder),
       regularFont_(regularFont), semiboldFont_(semiboldFont),
       kicker_(semiboldFont, "CLASSIC TIC-TAC-TOE", Theme::labelSize),
       title_(semiboldFont, "Player setup", Theme::pageTitleSize),
@@ -186,6 +186,7 @@ void TicTacToeSetupScene::startMatch()
     config.difficulty = static_cast<AIDifficulty>(difficulty_);
     config.bestOf = bestOf_ == 0 ? BestOf::Single : bestOf_ == 1 ? BestOf::Three : BestOf::Five;
     session_.startNewMatch(config);
+    if (const auto active = profileService_.activeProfile()) matchRecorder_.beginTicTacToe(*active, session_.config());
     editing_ = false;
     sceneManager_.switchTo(SceneId::TicTacToeGame);
 }
