@@ -10,6 +10,7 @@
 #include <array>
 
 using namespace classic_ttt;
+using audio::SoundId;
 
 namespace {
 constexpr std::array<const char*, 6> labels{
@@ -24,16 +25,15 @@ std::string visibleName(const std::string& value)
 }
 } // namespace
 
-TicTacToeSetupScene::TicTacToeSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                         SceneManager& sceneManager, TicTacToeSession& session,
+TicTacToeSetupScene::TicTacToeSetupScene(AppContext& context, TicTacToeSession& session,
                                          persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder)
-    : sceneManager_(sceneManager), session_(session), profileService_(profileService), matchRecorder_(matchRecorder),
-      regularFont_(regularFont), semiboldFont_(semiboldFont),
-      kicker_(semiboldFont, "CLASSIC TIC-TAC-TOE", Theme::labelSize),
-      title_(semiboldFont, "Player setup", Theme::pageTitleSize),
-      subtitle_(regularFont, "Choose players, marks, and match length before entering the board.", Theme::bodySize),
-      help_(regularFont, "Up / Down or Tab to navigate  |  Left / Right to change  |  Enter to edit or start", Theme::labelSize),
-      startButton_(semiboldFont, "Start Match", {250.f, 56.f}), backButton_(semiboldFont, "Back", {170.f, 56.f})
+    : context_(context), session_(session), profileService_(profileService), matchRecorder_(matchRecorder),
+      regularFont_(context.regularFont), semiboldFont_(context.semiboldFont),
+      kicker_(context.semiboldFont, "CLASSIC TIC-TAC-TOE", Theme::labelSize),
+      title_(context.semiboldFont, "Player setup", Theme::pageTitleSize),
+      subtitle_(context.regularFont, "Choose players, marks, and match length before entering the board.", Theme::bodySize),
+      help_(context.regularFont, "Up / Down or Tab to navigate  |  Left / Right to change  |  Enter to edit or start", Theme::labelSize),
+      startButton_(context.semiboldFont, "Start Match", {250.f, 56.f}), backButton_(context.semiboldFont, "Back", {170.f, 56.f})
 {
     kicker_.setPosition({Theme::pageMargin, 42.f});
     kicker_.setFillColor(Theme::secondary);
@@ -76,12 +76,14 @@ void TicTacToeSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& 
 
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Escape) {
-            if (editing_) editing_ = false;
-            else sceneManager_.switchTo(SceneId::GameLibrary);
+            if (editing_) { editing_ = false; context_.play(SoundId::UiBack); }
+            else { goBack(); return; }
         } else if (key->code == sf::Keyboard::Key::Backspace && editing_) {
             auto& name = selected_ == 1 ? playerOne_ : playerTwo_;
             utf8_text::eraseLast(name);
-        } else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Down) {
+        } else if (key->code == sf::Keyboard::Key::Tab) {
+            moveSelection(key->shift ? -1 : 1);
+        } else if (key->code == sf::Keyboard::Key::Down) {
             moveSelection(1);
         } else if (key->code == sf::Keyboard::Key::Up) {
             moveSelection(-1);
@@ -91,6 +93,7 @@ void TicTacToeSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& 
             adjustSelected(1);
         } else if (key->code == sf::Keyboard::Key::Enter) {
             activateSelected();
+            return;
         }
         refresh();
     }
@@ -100,24 +103,24 @@ void TicTacToeSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& 
         startButton_.setHovered(startButton_.contains(point));
         backButton_.setHovered(backButton_.contains(point));
         for (std::size_t index = 0; index < rowCount; ++index) {
-            if (rows_[index].getGlobalBounds().contains(point)) selected_ = index;
+            if (rows_[index].getGlobalBounds().contains(point) && !editing_) select(index, true);
         }
+        if (startButton_.contains(point) && !editing_) select(startIndex, true);
+        if (backButton_.contains(point) && !editing_) select(backIndex, true);
         refresh();
     }
 
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
         click && click->button == sf::Mouse::Button::Left) {
         const auto point = window.mapPixelToCoords(click->position);
-        if (startButton_.contains(point)) { selected_ = startIndex; startMatch(); }
-        else if (backButton_.contains(point)) sceneManager_.switchTo(SceneId::GameLibrary);
-        else {
-            for (std::size_t index = 0; index < rowCount; ++index) {
-                if (rows_[index].getGlobalBounds().contains(point)) {
-                    selected_ = index;
-                    if (index == 1 || (index == 2 && mode_ == 0)) editing_ = true;
-                    else adjustSelected(1);
-                    break;
-                }
+        if (startButton_.contains(point)) { select(startIndex, false); startMatch(); return; }
+        if (backButton_.contains(point)) { goBack(); return; }
+        for (std::size_t index = 0; index < rowCount; ++index) {
+            if (rows_[index].getGlobalBounds().contains(point)) {
+                select(index, false);
+                if (index == 1 || (index == 2 && mode_ == 0)) { editing_ = true; context_.play(SoundId::UiConfirm); }
+                else adjustSelected(1);
+                break;
             }
         }
         refresh();
@@ -126,8 +129,8 @@ void TicTacToeSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& 
 
 void TicTacToeSetupScene::update(sf::Time deltaTime)
 {
-    startButton_.update(deltaTime);
-    backButton_.update(deltaTime);
+    startButton_.update(deltaTime, context_.reducedMotion());
+    backButton_.update(deltaTime, context_.reducedMotion());
 }
 
 void TicTacToeSetupScene::render(sf::RenderWindow& window) const
@@ -148,32 +151,59 @@ void TicTacToeSetupScene::onActivate()
     }
     editing_ = false;
     selected_ = 0;
+    startButton_.setHovered(false);
+    backButton_.setHovered(false);
     refresh();
+}
+
+void TicTacToeSetupScene::select(std::size_t index, bool withSound)
+{
+    if (withSound && index != selected_) context_.play(SoundId::UiFocus);
+    selected_ = index;
 }
 
 void TicTacToeSetupScene::moveSelection(int offset)
 {
     editing_ = false;
     constexpr int count = 8;
-    selected_ = static_cast<std::size_t>((static_cast<int>(selected_) + offset + count) % count);
+    select(static_cast<std::size_t>((static_cast<int>(selected_) + offset + count) % count), true);
 }
 
 void TicTacToeSetupScene::adjustSelected(int offset)
 {
     editing_ = false;
     const auto cycle = [offset](int value, int count) { return (value + offset + count) % count; };
+    bool changed = true;
     if (selected_ == 0) mode_ = cycle(mode_, 2);
     else if (selected_ == 3 && mode_ == 1) humanMark_ = cycle(humanMark_, 2);
     else if (selected_ == 4 && mode_ == 1) difficulty_ = cycle(difficulty_, 3);
     else if (selected_ == 5) bestOf_ = cycle(bestOf_, 3);
+    else changed = false;
+    if (changed) context_.play(SoundId::UiConfirm);
+    else if (selected_ < rowCount) context_.play(SoundId::UiError);
 }
 
 void TicTacToeSetupScene::activateSelected()
 {
-    if (selected_ == 1 || (selected_ == 2 && mode_ == 0)) editing_ = !editing_;
-    else if (selected_ < rowCount) adjustSelected(1);
-    else if (selected_ == startIndex) startMatch();
-    else sceneManager_.switchTo(SceneId::GameLibrary);
+    if (selected_ == 1 || (selected_ == 2 && mode_ == 0)) {
+        editing_ = !editing_;
+        context_.play(editing_ ? SoundId::UiConfirm : SoundId::UiBack);
+        refresh();
+    } else if (selected_ < rowCount) {
+        adjustSelected(1);
+        refresh();
+    } else if (selected_ == startIndex) {
+        startMatch();
+    } else {
+        goBack();
+    }
+}
+
+void TicTacToeSetupScene::goBack()
+{
+    editing_ = false;
+    context_.play(SoundId::UiBack);
+    context_.scenes.switchTo(SceneId::GameLibrary);
 }
 
 void TicTacToeSetupScene::startMatch()
@@ -187,8 +217,10 @@ void TicTacToeSetupScene::startMatch()
     config.bestOf = bestOf_ == 0 ? BestOf::Single : bestOf_ == 1 ? BestOf::Three : BestOf::Five;
     session_.startNewMatch(config);
     if (const auto active = profileService_.activeProfile()) matchRecorder_.beginTicTacToe(*active, session_.config());
+    else matchRecorder_.abandon();
     editing_ = false;
-    sceneManager_.switchTo(SceneId::TicTacToeGame);
+    context_.play(SoundId::UiConfirm);
+    context_.scenes.switchTo(SceneId::TicTacToeGame);
 }
 
 void TicTacToeSetupScene::refresh()
@@ -212,5 +244,6 @@ void TicTacToeSetupScene::refresh()
 
 void TicTacToeSetupScene::editName(std::string& name, char32_t codepoint)
 {
-    utf8_text::appendPrintable(name, codepoint, 24);
+    if (codepoint < 32) return;  // Enter/Backspace/Tab arrive as TextEntered too and are handled as keys.
+    if (!utf8_text::appendPrintable(name, codepoint, 24)) context_.play(SoundId::UiError);
 }

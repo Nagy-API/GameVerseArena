@@ -3,7 +3,7 @@
 GameVerseArena is a C++17 games platform with two independently buildable applications:
 
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
-- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history, derived statistics and achievements, a game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
+- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history, derived statistics and achievements, persistent audio and accessibility settings, procedural sound effects, a game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
 
 Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
@@ -30,7 +30,7 @@ Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original
 - Git (used by CMake FetchContent)
 - A C++17 compiler, such as Visual Studio C++ or GNU C++
 
-The graphical target uses SFML 3.1.0. CMake fetches the pinned release from the official SFML repository, so the first configure requires an internet connection and may take several minutes while SFML is downloaded and built. SQLite 3.53.4 is vendored from the official amalgamation and requires no installed DLL, package manager, or network access. The console sources remain independent of both SFML and SQLite and can still be compiled directly.
+The graphical target uses the SFML 3.1.0 Graphics and Audio modules. CMake fetches the pinned release from the official SFML repository, and SFML's own build fetches the Ogg 1.3.6, FLAC 1.5.0, and Vorbis 1.3.7 sources its Audio module depends on, so the first configure requires an internet connection and may take several minutes. SQLite 3.53.4 is vendored from the official amalgamation and requires no installed DLL, package manager, or network access. The console sources remain independent of SFML (including SFML Audio) and SQLite and can still be compiled directly.
 
 ## Build on Windows
 
@@ -51,8 +51,14 @@ cmake --build build --config Release --target GameVerseArenaPingPongTests
 cmake --build build --config Release --target GameVerseArenaPersistenceTests
 cmake --build build --config Release --target GameVerseArenaMatchHistoryTests
 cmake --build build --config Release --target GameVerseArenaAchievementTests
+cmake --build build --config Release --target GameVerseArenaSettingsTests
+cmake --build build --config Release --target GameVerseArenaSchemaSafetyTests
+cmake --build build --config Release --target GameVerseArenaAudioTests
+cmake --build build --config Release --target GameVerseArenaAudioEngineTests
 ctest --test-dir build --output-on-failure
 ```
+
+No test needs a window or sound hardware: the audio-engine tests use SFML's silent null playback device, and every persistence test uses temporary database files.
 
 With a Visual Studio multi-configuration generator, the executables are normally at:
 
@@ -113,9 +119,17 @@ One row is written only when a complete Single Game, Best of 3, Best of 5, or fi
 
 Statistics are always recomputed from completed match history; profile rows contain no duplicated win/loss counters. Win rate is wins divided by all completed matches, including draws in the denominator. A loss or draw breaks a win streak. Deleting a profile cascades deletion to its local history.
 
-Schema version 3 stores UTC epoch-millisecond start/completion timestamps and a monotonic active duration. Setup and result-overlay time are excluded, and paused Ping Pong time is excluded. Three history indexes support newest-first profile pages and SQL game/result filters without loading an unbounded list.
+History rows store UTC epoch-millisecond start/completion timestamps and a monotonic active duration. Setup and result-overlay time are excluded, and paused Ping Pong time is excluded. Three history indexes support newest-first profile pages and SQL game/result filters without loading an unbounded list.
 
-For isolated startup testing, the GUI accepts `--database <path>`. This explicitly injected path should be used for destructive tests so real profile data is never touched.
+The current database schema is version 4. It adds app-wide settings and widens the history table's game list so that every graphical game can be recorded; upgrading an older database keeps every existing row. A database created by a newer, unknown schema version is refused without being modified, and a non-empty SQLite file that is not a GameVerseArena database is never adopted.
+
+## Command-line options
+
+- `--database <path>` uses an explicit database file instead of the per-user default. Use it for any destructive testing so real profile data is never touched.
+- `--silent-audio` routes sound to SFML's silent null device.
+- `--smoke-test <output-dir>` is a developer verification mode: it drives the real scenes with synthetic keyboard and mouse input, checks scene changes, settings persistence, and one-row-per-match history, and writes PNG captures at 1280 x 720 and 960 x 540 plus `smoke-test.log` to the output directory, then exits with 0 when every check passed. It requires `--database` with a path that does not exist yet and refuses the production database.
+
+Unknown options are rejected. On Windows the command line, the executable location, and `%LOCALAPPDATA%` are read as Unicode, so folders with non-ASCII names work.
 
 ## Player achievements
 
@@ -138,13 +152,39 @@ The 12 achievements are:
 
 Conditions and progress are recomputed from authoritative completed-match history; no achievement progress counters are stored. Only the profile ID, achievement key, and immutable first-unlock timestamp are persisted. Existing profiles are evaluated at startup after schema migration, and qualifying achievements receive the current UTC recognition time rather than a fabricated historical date. Recognition is idempotent, database uniqueness prevents duplicates, and profile deletion cascades both history and unlock facts.
 
-After a completed match is saved successfully, its persistent profile is evaluated and each newly unlocked achievement is shown once in a non-blocking 3.5-second queue. Multiple unlocks appear sequentially and may be dismissed by clicking the toast. A failed match-history write never triggers achievement evaluation. This system is local-only and intentionally has no XP, levels, currency, rewards, audio, leaderboard, networking, or cloud component.
+After a completed match is saved successfully, its persistent profile is evaluated and each newly unlocked achievement is shown once in a non-blocking 3.5-second queue, with one unlock chime per toast. Multiple unlocks appear sequentially and may be dismissed by clicking the toast. A failed match-history write never triggers achievement evaluation. This system is local-only and intentionally has no XP, levels, currency, rewards, leaderboard, networking, or cloud component.
+
+## Settings, audio, and Reduced Motion
+
+Choose **Settings** from the main menu. Settings apply immediately, are saved automatically, and are shared by every profile on this computer:
+
+| Setting | Range | Default |
+| --- | --- | --- |
+| Master Volume | 0-100% | 80% |
+| UI Volume | 0-100% | 70% |
+| Gameplay Volume | 0-100% | 80% |
+| Achievement Volume | 0-100% | 85% |
+| Mute All | On / Off | Off |
+| Reduced Motion | On / Off | Off |
+
+Each category's loudness is Master Volume multiplied by the category volume. Mute All silences everything, including sounds already playing, without changing the stored levels. **Reset to Defaults** restores the table above. Use Up/Down or Tab to move, Left/Right to adjust by 5% (hold Shift for 1%), Home/End for 0% or 100%, Enter or Space to toggle, and Escape or **Back** to return; the mouse can click or drag a volume track and click a toggle. Stored values that are malformed or out of range fall back to their defaults and are reported on the Settings screen.
+
+All sound effects are short, original tones generated in memory when the application starts; no audio files are shipped and there is no background music. Sounds are grouped into three categories:
+
+- UI: focus/hover changes, confirm, back, and validation errors.
+- Gameplay: Tic-Tac-Toe X and O moves and win/draw/loss results; Ping Pong paddle hits, wall bounces, points, and the match result.
+- Achievement: the unlock chime when an achievement toast appears.
+
+At most 12 effects play at once; a new effect reuses the oldest voice. If no audio output device is available, the application runs silently and Settings still work and save.
+
+Reduced Motion turns off decorative motion: button hover/focus easing, the achievement toast slide-in, the Tic-Tac-Toe mark pop-in and selection pulse, and the Ping Pong ball trail. Focus highlights, marks, and every result message stay visible, and gameplay speed, physics, AI timing, and timers are never changed.
 
 ## GUI shell controls
 
 - Move the pointer over a button to highlight it; click the left mouse button to activate it.
 - Use Up and Down to change the selected main-menu item and Enter to activate it.
 - Keyboard actions activate once per key press; release the key before activating another scene or overlay action.
+- Tab moves focus forward and Shift+Tab moves it backward on menus, setup screens, and overlays.
 - Press Escape on Profiles, Game Library, Settings, or About to return to the main menu. In profile edit/delete overlays, Escape cancels the overlay first.
 - Press Escape on the main menu to close the application.
 - Resize the window normally; the 16:9 interface view scales while preserving the layout. The practical design size is 960 x 540 or larger, with a default window size of 1280 x 720 and a 60 FPS frame limit.

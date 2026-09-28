@@ -8,6 +8,13 @@
 
 namespace ping_pong {
 
+// Contacts that occurred during the most recent step(); used for presentation feedback
+// such as sound, never for rules.
+struct StepEvents {
+    bool paddleHit{false};
+    bool wallHit{false};
+};
+
 class PingPongSimulation {
 public:
     static constexpr double paddleSpeed = 560.0;
@@ -24,17 +31,19 @@ public:
     const SimulationState& state() const noexcept { return state_; }
     void restoreState(const SimulationState& state);
     bool pointAwarded() const noexcept { return pointAwarded_; }
+    const StepEvents& lastStepEvents() const noexcept { return lastEvents_; }
 
 private:
     void initializeGeometry();
     void movePaddle(PaddleState& paddle, Movement movement, double speedScale, double seconds);
-    void resolveWalls();
+    bool resolveWalls();
     bool resolvePaddle(PaddleState& paddle, Side side);
     void bounceFromPaddle(const PaddleState& paddle, Side side);
 
     SimulationState state_{};
     std::mt19937 rng_;
     bool pointAwarded_{false};
+    StepEvents lastEvents_{};
 };
 
 } // namespace ping_pong

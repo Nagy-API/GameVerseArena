@@ -2,9 +2,9 @@
 
 #include "ProfileDeleteOverlay.hpp"
 #include "ProfileEditOverlay.hpp"
+#include "AppContext.hpp"
 #include "ProfileService.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
@@ -17,8 +17,7 @@
 
 class ProfilesScene final : public Scene {
 public:
-    ProfilesScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                  SceneManager& sceneManager, persistence::ProfileService& profileService,
+    ProfilesScene(AppContext& context, persistence::ProfileService& profileService,
                   std::int64_t& selectedStatsProfileId);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -33,13 +32,15 @@ private:
 
     void moveProfileSelection(int offset);
     void moveActionSelection(int offset);
+    void selectAction(std::size_t action, bool withSound);
+    void selectProfile(std::size_t index, bool withSound);
     void activateAction(std::size_t action);
     void reload(std::optional<std::int64_t> preferredId = std::nullopt);
     void refresh();
     std::optional<persistence::Profile> selectedProfile() const;
     bool selectedIsActive() const;
 
-    SceneManager& sceneManager_;
+    AppContext& context_;
     persistence::ProfileService& profileService_;
     std::int64_t& selectedStatsProfileId_;
     const sf::Font& regularFont_;
@@ -48,6 +49,7 @@ private:
     sf::Text subtitle_;
     sf::Text help_;
     sf::Text scrollStatus_;
+    sf::Text actionError_;
     std::array<sf::RectangleShape, visibleCount> cards_;
     std::vector<sf::Text> names_;
     std::vector<sf::Text> badges_;

@@ -3,13 +3,35 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace persistence {
 
-enum class GameKey { ClassicTicTacToe, PingPong };
+// Every game key the v4 schema's CHECK constraint accepts, so each stored row can be decoded.
+enum class GameKey {
+    ClassicTicTacToe,
+    NumericalTicTacToe,
+    Sus,
+    FiveByFiveTicTacToe,
+    MisereTicTacToe,
+    FourInARow,
+    FourByFourTicTacToe,
+    WordTicTacToe,
+    PyramidTicTacToe,
+    Diamond,
+    InfinityXo,
+    UltimateXo,
+    MemoryXo,
+    ObstacleTicTacToe,
+    PingPong
+};
+
+const std::vector<GameKey>& allGameKeys();
 enum class MatchMode { HumanVsHuman, HumanVsComputer };
 enum class MatchResult { Win, Loss, Draw };
-enum class DifficultyKey { None, Easy, Medium, Hard };
+// Standard identifies a computer opponent whose game offers one faithful strategy rather
+// than selectable Easy/Medium/Hard levels. None is used only for human-vs-human matches.
+enum class DifficultyKey { None, Easy, Medium, Hard, Standard };
 
 struct CompletedMatch {
     std::int64_t id{};

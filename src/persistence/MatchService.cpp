@@ -17,6 +17,8 @@ std::int64_t MatchService::recordCompleted(const CompletedMatch& match)
 
 void MatchService::validate(const CompletedMatch& value)
 {
+    if (value.game != GameKey::ClassicTicTacToe && value.game != GameKey::PingPong)
+        throw std::invalid_argument("This build cannot record completed matches for that game");
     if (value.profileId <= 0 || value.opponentName.empty() || value.profileDisplayName.empty() ||
         value.matchFormat.empty()) throw std::invalid_argument("Completed match is missing required data");
     if (value.durationMs < 0) throw std::invalid_argument("Match duration cannot be negative");

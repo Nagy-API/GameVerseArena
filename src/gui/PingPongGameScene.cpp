@@ -14,16 +14,16 @@
 #include <string>
 
 using namespace ping_pong;
+using audio::SoundId;
 
-PingPongGameScene::PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                     SceneManager& sceneManager, PingPongSession& session,
+PingPongGameScene::PingPongGameScene(AppContext& context, PingPongSession& session,
                                      persistence::MatchRecorder& matchRecorder,
                                      persistence::AchievementService& achievements,
                                      achievements::AchievementNotificationQueue& notifications)
-    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), achievements_(achievements),
-      notifications_(notifications), regularFont_(regularFont), semiboldFont_(semiboldFont),
-      pauseButton_(semiboldFont, "Pause", {150.f, 48.f}),
-      pauseOverlay_(regularFont, semiboldFont), resultOverlay_(regularFont, semiboldFont)
+    : context_(context), session_(session), matchRecorder_(matchRecorder), achievements_(achievements),
+      notifications_(notifications), regularFont_(context.regularFont), semiboldFont_(context.semiboldFont),
+      pauseButton_(context.semiboldFont, "Pause", {150.f, 48.f}),
+      pauseOverlay_(context), resultOverlay_(context)
 {
     pauseButton_.setPosition({42.f, 28.f});
 }
@@ -49,7 +49,7 @@ void PingPongGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& wi
     }
 
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
-        if (key->code == sf::Keyboard::Key::Escape) { setPaused(true); return; }
+        if (key->code == sf::Keyboard::Key::Escape) { setPaused(true); context_.play(SoundId::UiBack); return; }
         setKey(key->code, true);
     }
     if (const auto* key = event.getIf<sf::Event::KeyReleased>()) setKey(key->code, false);
@@ -59,12 +59,15 @@ void PingPongGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& wi
     }
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
         click && click->button == sf::Mouse::Button::Left &&
-        pauseButton_.contains(window.mapPixelToCoords(click->position))) setPaused(true);
+        pauseButton_.contains(window.mapPixelToCoords(click->position))) {
+        setPaused(true);
+        context_.play(SoundId::UiConfirm);
+    }
 }
 
 void PingPongGameScene::update(sf::Time deltaTime)
 {
-    pauseButton_.update(deltaTime);
+    pauseButton_.update(deltaTime, context_.reducedMotion());
     if (resultOverlay_.visible()) { resultOverlay_.update(deltaTime); return; }
     if (paused_) { pauseOverlay_.update(deltaTime); return; }
 
@@ -83,7 +86,17 @@ void PingPongGameScene::update(sf::Time deltaTime)
 
         if (const auto scorer = simulation_.step(fixedStep, controlsForStep(fixedStep))) {
             session_.awardPoint(*scorer);
-            if (session_.matchFinished()) { resultOverlay_.show(session_); recordIfComplete(); }
+            if (session_.matchFinished()) {
+                playMatchResultSound();
+                resultOverlay_.show(session_);
+                recordIfComplete();
+            } else {
+                context_.play(SoundId::PointScored);
+            }
+        } else {
+            const auto& contacts = simulation_.lastStepEvents();
+            if (contacts.paddleHit) context_.play(SoundId::PaddleHit);
+            if (contacts.wallHit) context_.play(SoundId::WallHit);
         }
         trail_.push_back(simulation_.state().ball.position);
         while (trail_.size() > 8) trail_.pop_front();
@@ -191,17 +204,32 @@ void PingPongGameScene::restartMatch()
 
 void PingPongGameScene::handlePauseAction(PingPongPauseAction action)
 {
-    if (action == PingPongPauseAction::Resume) setPaused(false);
-    else if (action == PingPongPauseAction::RestartMatch) restartMatch();
-    else if (action == PingPongPauseAction::NewSetup) { clearHeldInput(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::PingPongSetup); }
-    else if (action == PingPongPauseAction::ReturnToLibrary) { clearHeldInput(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
+    if (action == PingPongPauseAction::Resume) { setPaused(false); context_.play(SoundId::UiConfirm); }
+    else if (action == PingPongPauseAction::RestartMatch) { restartMatch(); context_.play(SoundId::UiConfirm); }
+    else if (action == PingPongPauseAction::NewSetup) {
+        clearHeldInput(); matchRecorder_.abandon(); context_.play(SoundId::UiBack);
+        context_.scenes.switchTo(SceneId::PingPongSetup);
+    } else if (action == PingPongPauseAction::ReturnToLibrary) {
+        clearHeldInput(); matchRecorder_.abandon(); context_.play(SoundId::UiBack);
+        context_.scenes.switchTo(SceneId::GameLibrary);
+    }
 }
 
 void PingPongGameScene::handleResultAction(PingPongResultAction action)
 {
-    if (action == PingPongResultAction::Rematch) restartMatch();
-    else if (action == PingPongResultAction::NewSetup) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::PingPongSetup); }
-    else if (action == PingPongResultAction::ReturnToLibrary) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
+    if (action == PingPongResultAction::Rematch) { restartMatch(); context_.play(SoundId::UiConfirm); }
+    else if (action == PingPongResultAction::NewSetup) {
+        matchRecorder_.abandon(); context_.play(SoundId::UiBack); context_.scenes.switchTo(SceneId::PingPongSetup);
+    } else if (action == PingPongResultAction::ReturnToLibrary) {
+        matchRecorder_.abandon(); context_.play(SoundId::UiBack); context_.scenes.switchTo(SceneId::GameLibrary);
+    }
+}
+
+void PingPongGameScene::playMatchResultSound()
+{
+    const auto winner = session_.winner();
+    const bool computerWon = session_.config().mode == GameMode::HumanVsComputer && winner && *winner == Side::Right;
+    context_.play(computerWon ? SoundId::RoundLoss : SoundId::MatchWin);
 }
 
 void PingPongGameScene::recordIfComplete()
@@ -232,7 +260,8 @@ void PingPongGameScene::drawPlayfield(sf::RenderTarget& target) const
         dash.setPosition({638.5f, static_cast<float>(state.field.top + 11.0 + index * 41.0)});
         dash.setFillColor(Theme::divider); target.draw(dash);
     }
-    for (std::size_t index = 0; index < trail_.size(); ++index) {
+    // The ball trail is decorative motion; Reduced Motion hides it. Physics are unchanged.
+    for (std::size_t index = 0; !context_.reducedMotion() && index < trail_.size(); ++index) {
         const float radius = 3.f + static_cast<float>(index) * 0.55f;
         sf::CircleShape trail(radius); trail.setOrigin({radius, radius});
         trail.setPosition({static_cast<float>(trail_[index].x), static_cast<float>(trail_[index].y)});

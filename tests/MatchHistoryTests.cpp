@@ -1,3 +1,5 @@
+#include "Schema.hpp"
+#include "TestSchemaSupport.hpp"
 #include "Database.hpp"
 #include "MatchRepository.hpp"
 #include "MatchRecorder.hpp"
@@ -68,15 +70,15 @@ void testMigration(const std::filesystem::path& directory)
     const auto path = directory / "migration.db";
     {
         persistence::Database database(path);
-        check(database.userVersion() == 3, "new database opens at schema v3");
+        check(database.userVersion() == persistence::schema::currentVersion, "new database opens at the current schema");
         persistence::ProfileService profiles(database); profiles.bootstrap();
         profiles.createProfile("Survivor");
     }
     {
         persistence::Database database(path);
         persistence::ProfileService profiles(database);
-        check(database.userVersion() == 3 && profiles.listProfiles().size() == 2,
-              "v3 reopen is idempotent and profiles survive");
+        check(database.userVersion() == persistence::schema::currentVersion && profiles.listProfiles().size() == 2,
+              "current-schema reopen is idempotent and profiles survive");
         check(profiles.activeProfile().has_value(), "active profile survives schema reopen");
     }
 
@@ -88,16 +90,12 @@ void testMigration(const std::filesystem::path& directory)
         profiles.createProfile("Legacy One");
         const auto legacyActive = profiles.createProfile("Legacy Active");
         profiles.setActiveProfile(legacyActive.id); legacyActiveId = legacyActive.id;
-        database.execute("DROP INDEX IF EXISTS matches_profile_result_completed;");
-        database.execute("DROP INDEX IF EXISTS matches_profile_game_completed;");
-        database.execute("DROP INDEX IF EXISTS matches_profile_completed;");
-        database.execute("DROP TABLE matches;");
-        database.execute("DROP TABLE achievement_unlocks;");
-        database.execute("PRAGMA user_version = 1;");
+        test_support::downgradeToVersion(database, 1);
     }
     {
         persistence::Database migrated(v1Path);
-        check(migrated.userVersion() == 3, "an existing v1 database migrates through v2 to v3");
+        check(migrated.userVersion() == persistence::schema::currentVersion,
+              "an existing v1 database migrates through every version to the current schema");
         auto table = migrated.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='matches';");
         check(table.step() && table.integer(0) == 1, "v1 to v2 migration creates matches table");
         persistence::ProfileService profiles(migrated);
@@ -107,10 +105,13 @@ void testMigration(const std::filesystem::path& directory)
     }
 
     const auto futurePath = directory / "future.db";
-    { persistence::Database database(futurePath); database.execute("PRAGMA user_version = 4;"); }
-    try { persistence::Database unsupported(futurePath); check(false, "future v4 must be rejected"); }
+    const int future = persistence::schema::currentVersion + 1;
+    { persistence::Database database(futurePath);
+      database.execute(("PRAGMA user_version = " + std::to_string(future) + ";").c_str()); }
+    try { persistence::Database unsupported(futurePath); check(false, "future schema must be rejected"); }
     catch (const std::runtime_error& error) {
-        check(std::string(error.what()).find("version 4") != std::string::npos, "future-version rejection identifies v4");
+        check(std::string(error.what()).find("version " + std::to_string(future)) != std::string::npos,
+              "future-version rejection identifies the unsupported version");
     }
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/CircleShape.hpp>
@@ -13,23 +13,20 @@
 
 class MainMenuScene final : public Scene {
 public:
-    MainMenuScene(const sf::Font& regularFont,
-                  const sf::Font& semiboldFont,
-                  SceneManager& sceneManager,
-                  sf::RenderWindow& window);
+    explicit MainMenuScene(AppContext& context);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
     void render(sf::RenderWindow& window) const override;
     void onResize(sf::Vector2u size) override;
+    void onActivate() override;
 
 private:
     void activate(std::size_t index);
     void moveSelection(int offset);
-    void refreshSelection();
+    void select(std::size_t index, bool withSound);
 
-    SceneManager& sceneManager_;
-    sf::RenderWindow& window_;
+    AppContext& context_;
     sf::Text eyebrow_;
     sf::Text title_;
     sf::Text subtitle_;

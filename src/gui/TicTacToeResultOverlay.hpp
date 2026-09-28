@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "TicTacToeSession.hpp"
 #include "UiButton.hpp"
 
@@ -15,7 +16,7 @@ enum class TicTacToeResultAction { None, NextRound, RestartRound, Rematch, NewSe
 
 class TicTacToeResultOverlay {
 public:
-    TicTacToeResultOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont);
+    explicit TicTacToeResultOverlay(AppContext& context);
 
     void show(const classic_ttt::TicTacToeSession& session);
     void hide() noexcept { visible_ = false; }
@@ -26,9 +27,10 @@ public:
     void draw(sf::RenderTarget& target) const;
 
 private:
-    void select(std::size_t index);
+    void select(std::size_t index, bool withSound = false);
     TicTacToeResultAction actionFor(std::size_t index) const;
 
+    AppContext& context_;
     sf::RectangleShape shade_;
     sf::RectangleShape panel_;
     sf::Text eyebrow_;

@@ -5,22 +5,20 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 
-GameLibraryScene::GameLibraryScene(const sf::Font& regularFont,
-                                   const sf::Font& semiboldFont,
-                                   SceneManager& sceneManager)
-    : sceneManager_(sceneManager),
-      kicker_(semiboldFont, "GAME LIBRARY", Theme::labelSize),
-      title_(semiboldFont, "Choose your arena", Theme::pageTitleSize),
-      subtitle_(regularFont, "Choose a turn-based classic or enter the real-time arcade.", Theme::bodySize),
-      classicCard_(semiboldFont, "Classic Tic-Tac-Toe", {530.f, 118.f}),
-      classicDetails_(regularFont, "PLAYABLE IN GUI  |  3x3  |  LOCAL OR AI", Theme::labelSize),
+GameLibraryScene::GameLibraryScene(AppContext& context)
+    : context_(context),
+      kicker_(context.semiboldFont, "GAME LIBRARY", Theme::labelSize),
+      title_(context.semiboldFont, "Choose your arena", Theme::pageTitleSize),
+      subtitle_(context.regularFont, "Choose a turn-based classic or enter the real-time arcade.", Theme::bodySize),
+      classicCard_(context.semiboldFont, "Classic Tic-Tac-Toe", {530.f, 118.f}),
+      classicDetails_(context.regularFont, "PLAYABLE IN GUI  |  3x3  |  LOCAL OR AI", Theme::labelSize),
       consoleCard_({1136.f, 170.f}),
-      pingPongCard_(semiboldFont, "Ping Pong", {530.f, 118.f}),
-      pingPongDetails_(regularFont, "ARCADE GAMES  |  REAL-TIME  |  LOCAL OR AI", Theme::labelSize),
-      consoleTitle_(semiboldFont, "13 More Board Games", 25),
-      consoleBadge_(semiboldFont, "AVAILABLE IN CONSOLE", Theme::labelSize),
-      consoleDescription_(regularFont, "Numerical, SUS, 5x5, Misere, Four-in-a-Row,\n4x4, Word, Pyramid, Diamond, Infinity,\nUltimate, Memory, and Obstacle.", 16),
-      backButton_(semiboldFont, "Back", {170.f, 54.f})
+      pingPongCard_(context.semiboldFont, "Ping Pong", {530.f, 118.f}),
+      pingPongDetails_(context.regularFont, "ARCADE GAMES  |  REAL-TIME  |  LOCAL OR AI", Theme::labelSize),
+      consoleTitle_(context.semiboldFont, "13 More Board Games", 25),
+      consoleBadge_(context.semiboldFont, "AVAILABLE IN CONSOLE", Theme::labelSize),
+      consoleDescription_(context.regularFont, "Numerical, SUS, 5x5, Misere, Four-in-a-Row,\n4x4, Word, Pyramid, Diamond, Infinity,\nUltimate, Memory, and Obstacle.", 16),
+      backButton_(context.semiboldFont, "Back", {170.f, 54.f})
 {
     kicker_.setPosition({Theme::pageMargin, 42.f}); kicker_.setFillColor(Theme::secondary);
     title_.setPosition({Theme::pageMargin, 70.f}); title_.setFillColor(Theme::textPrimary);
@@ -47,9 +45,8 @@ void GameLibraryScene::handleEvent(const sf::Event& event, sf::RenderWindow& win
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Escape) goBack();
         else if (key->code == sf::Keyboard::Key::Up || key->code == sf::Keyboard::Key::Down || key->code == sf::Keyboard::Key::Tab) {
-            const int direction = key->code == sf::Keyboard::Key::Up ? -1 : 1;
-            selectedIndex_ = static_cast<std::size_t>((static_cast<int>(selectedIndex_) + direction + 3) % 3);
-            refreshSelection();
+            const int direction = key->code == sf::Keyboard::Key::Up || (key->code == sf::Keyboard::Key::Tab && key->shift) ? -1 : 1;
+            select(static_cast<std::size_t>((static_cast<int>(selectedIndex_) + direction + 3) % 3), true);
         } else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) {
             if (selectedIndex_ == 0) openClassic();
             else if (selectedIndex_ == 1) openPingPong();
@@ -62,10 +59,9 @@ void GameLibraryScene::handleEvent(const sf::Event& event, sf::RenderWindow& win
         classicCard_.setHovered(classicCard_.contains(point));
         pingPongCard_.setHovered(pingPongCard_.contains(point));
         backButton_.setHovered(backButton_.contains(point));
-        if (classicCard_.contains(point)) selectedIndex_ = 0;
-        if (pingPongCard_.contains(point)) selectedIndex_ = 1;
-        if (backButton_.contains(point)) selectedIndex_ = 2;
-        refreshSelection();
+        if (classicCard_.contains(point)) select(0, true);
+        if (pingPongCard_.contains(point)) select(1, true);
+        if (backButton_.contains(point)) select(2, true);
     }
 
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
@@ -79,7 +75,8 @@ void GameLibraryScene::handleEvent(const sf::Event& event, sf::RenderWindow& win
 
 void GameLibraryScene::update(sf::Time deltaTime)
 {
-    classicCard_.update(deltaTime); pingPongCard_.update(deltaTime); backButton_.update(deltaTime);
+    const bool reduced = context_.reducedMotion();
+    classicCard_.update(deltaTime, reduced); pingPongCard_.update(deltaTime, reduced); backButton_.update(deltaTime, reduced);
 }
 
 void GameLibraryScene::render(sf::RenderWindow& window) const
@@ -99,9 +96,16 @@ void GameLibraryScene::onActivate()
     refreshSelection();
 }
 
-void GameLibraryScene::goBack() { sceneManager_.switchTo(SceneId::MainMenu); }
-void GameLibraryScene::openClassic() { sceneManager_.switchTo(SceneId::TicTacToeSetup); }
-void GameLibraryScene::openPingPong() { sceneManager_.switchTo(SceneId::PingPongSetup); }
+void GameLibraryScene::goBack() { context_.play(audio::SoundId::UiBack); context_.scenes.switchTo(SceneId::MainMenu); }
+void GameLibraryScene::openClassic() { context_.play(audio::SoundId::UiConfirm); context_.scenes.switchTo(SceneId::TicTacToeSetup); }
+void GameLibraryScene::openPingPong() { context_.play(audio::SoundId::UiConfirm); context_.scenes.switchTo(SceneId::PingPongSetup); }
+
+void GameLibraryScene::select(std::size_t index, bool withSound)
+{
+    if (withSound && index != selectedIndex_) context_.play(audio::SoundId::UiFocus);
+    selectedIndex_ = index;
+    refreshSelection();
+}
 
 void GameLibraryScene::refreshSelection()
 {

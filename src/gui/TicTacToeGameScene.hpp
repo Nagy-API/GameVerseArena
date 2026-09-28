@@ -1,7 +1,7 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "TicTacToeAI.hpp"
 #include "TicTacToeResultOverlay.hpp"
 #include "TicTacToeSession.hpp"
@@ -17,8 +17,7 @@
 
 class TicTacToeGameScene final : public Scene {
 public:
-    TicTacToeGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                       SceneManager& sceneManager, classic_ttt::TicTacToeSession& session,
+    TicTacToeGameScene(AppContext& context, classic_ttt::TicTacToeSession& session,
                        persistence::MatchRecorder& matchRecorder,
                        persistence::AchievementService& achievements,
                        achievements::AchievementNotificationQueue& notifications);
@@ -41,10 +40,12 @@ private:
     void requestLibraryExit();
     void updateButtonStates();
     void recordIfComplete();
+    void playMoveFeedback(classic_ttt::Cell mark);
+    void leaveToLibrary();
     void drawBoard(sf::RenderTarget& target) const;
     void drawExitConfirmation(sf::RenderTarget& target) const;
 
-    SceneManager& sceneManager_;
+    AppContext& context_;
     classic_ttt::TicTacToeSession& session_;
     persistence::MatchRecorder& matchRecorder_;
     persistence::AchievementService& achievements_;

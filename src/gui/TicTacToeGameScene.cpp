@@ -13,6 +13,7 @@
 #include <string>
 
 using namespace classic_ttt;
+using audio::SoundId;
 
 namespace {
 constexpr float cellSize = Theme::boardSize / 3.f;
@@ -24,19 +25,18 @@ std::string matchLength(BestOf bestOf)
 }
 } // namespace
 
-TicTacToeGameScene::TicTacToeGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                       SceneManager& sceneManager, TicTacToeSession& session,
+TicTacToeGameScene::TicTacToeGameScene(AppContext& context, TicTacToeSession& session,
                                        persistence::MatchRecorder& matchRecorder,
                                        persistence::AchievementService& achievements,
                                        achievements::AchievementNotificationQueue& notifications)
-    : sceneManager_(sceneManager), session_(session), matchRecorder_(matchRecorder), achievements_(achievements),
-      notifications_(notifications), regularFont_(regularFont), semiboldFont_(semiboldFont),
-      backButton_(semiboldFont, "Back to Library", {190.f, 50.f}),
-      restartButton_(semiboldFont, "Restart Round", {190.f, 50.f}),
-      newMatchButton_(semiboldFont, "New Match", {190.f, 50.f}),
-      exitYesButton_(semiboldFont, "Leave Match", {190.f, 52.f}),
-      exitNoButton_(semiboldFont, "Keep Playing", {190.f, 52.f}),
-      resultOverlay_(regularFont, semiboldFont)
+    : context_(context), session_(session), matchRecorder_(matchRecorder), achievements_(achievements),
+      notifications_(notifications), regularFont_(context.regularFont), semiboldFont_(context.semiboldFont),
+      backButton_(context.semiboldFont, "Back to Library", {190.f, 50.f}),
+      restartButton_(context.semiboldFont, "Restart Round", {190.f, 50.f}),
+      newMatchButton_(context.semiboldFont, "New Match", {190.f, 50.f}),
+      exitYesButton_(context.semiboldFont, "Leave Match", {190.f, 52.f}),
+      exitNoButton_(context.semiboldFont, "Keep Playing", {190.f, 52.f}),
+      resultOverlay_(context)
 {
     backButton_.setPosition({42.f, 30.f});
     restartButton_.setPosition({1028.f, 590.f});
@@ -55,38 +55,47 @@ void TicTacToeGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
 
     if (exitConfirmation_) {
         if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
-            if (key->code == sf::Keyboard::Key::Escape) exitConfirmation_ = false;
-            else if (key->code == sf::Keyboard::Key::Left || key->code == sf::Keyboard::Key::Right || key->code == sf::Keyboard::Key::Tab) {
+            if (key->code == sf::Keyboard::Key::Escape) {
+                exitConfirmation_ = false;
+                context_.play(SoundId::UiBack);
+            } else if (key->code == sf::Keyboard::Key::Left || key->code == sf::Keyboard::Key::Right ||
+                       key->code == sf::Keyboard::Key::Tab) {
                 exitYesSelected_ = !exitYesSelected_;
+                context_.play(SoundId::UiFocus);
             } else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) {
-                if (exitYesSelected_) { cancelAI(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
-                else exitConfirmation_ = false;
+                if (exitYesSelected_) { leaveToLibrary(); return; }
+                exitConfirmation_ = false;
+                context_.play(SoundId::UiConfirm);
             }
         }
         if (const auto* moved = event.getIf<sf::Event::MouseMoved>()) {
             const auto point = window.mapPixelToCoords(moved->position);
             exitYesButton_.setHovered(exitYesButton_.contains(point));
             exitNoButton_.setHovered(exitNoButton_.contains(point));
+            const bool previous = exitYesSelected_;
             if (exitYesButton_.contains(point)) exitYesSelected_ = true;
             if (exitNoButton_.contains(point)) exitYesSelected_ = false;
+            if (previous != exitYesSelected_) context_.play(SoundId::UiFocus);
         }
         if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
             click && click->button == sf::Mouse::Button::Left) {
             const auto point = window.mapPixelToCoords(click->position);
-            if (exitYesButton_.contains(point)) { cancelAI(); matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); }
-            else if (exitNoButton_.contains(point)) exitConfirmation_ = false;
+            if (exitYesButton_.contains(point)) { leaveToLibrary(); return; }
+            if (exitNoButton_.contains(point)) { exitConfirmation_ = false; context_.play(SoundId::UiConfirm); }
         }
         updateButtonStates();
         return;
     }
 
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
+        const auto before = selectedCell_;
         if (key->code == sf::Keyboard::Key::Escape) requestLibraryExit();
         else if (key->code == sf::Keyboard::Key::Left) selectedCell_.column = (selectedCell_.column + 2) % 3;
         else if (key->code == sf::Keyboard::Key::Right) selectedCell_.column = (selectedCell_.column + 1) % 3;
         else if (key->code == sf::Keyboard::Key::Up) selectedCell_.row = (selectedCell_.row + 2) % 3;
         else if (key->code == sf::Keyboard::Key::Down) selectedCell_.row = (selectedCell_.row + 1) % 3;
         else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) tryMove(selectedCell_);
+        if (!(before == selectedCell_)) context_.play(SoundId::UiFocus);
     }
 
     if (const auto* moved = event.getIf<sf::Event::MouseMoved>()) {
@@ -102,19 +111,25 @@ void TicTacToeGameScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
         click && click->button == sf::Mouse::Button::Left) {
         const auto point = window.mapPixelToCoords(click->position);
         if (backButton_.contains(point)) requestLibraryExit();
-        else if (restartButton_.contains(point)) { session_.restartRound(); resetVisualState(); scheduleAI(); }
-        else if (newMatchButton_.contains(point)) { session_.rematch(); matchRecorder_.restartTicTacToe(session_.config()); resetVisualState(); scheduleAI(); }
-        else if (const auto position = cellAt(point)) tryMove(*position);
+        else if (restartButton_.contains(point)) {
+            session_.restartRound(); resetVisualState(); scheduleAI(); context_.play(SoundId::UiConfirm);
+        } else if (newMatchButton_.contains(point)) {
+            session_.rematch(); matchRecorder_.restartTicTacToe(session_.config()); resetVisualState(); scheduleAI();
+            context_.play(SoundId::UiConfirm);
+        } else if (const auto position = cellAt(point)) tryMove(*position);
     }
 }
 
 void TicTacToeGameScene::update(sf::Time deltaTime)
 {
     const float seconds = deltaTime.asSeconds();
-    markAnimation_ = std::min(1.f, markAnimation_ + seconds * 5.5f);
+    const bool reduced = context_.reducedMotion();
+    markAnimation_ = reduced ? 1.f : std::min(1.f, markAnimation_ + seconds * 5.5f);
     selectionPulse_ += seconds;
-    backButton_.update(deltaTime); restartButton_.update(deltaTime); newMatchButton_.update(deltaTime);
-    exitYesButton_.update(deltaTime); exitNoButton_.update(deltaTime); resultOverlay_.update(deltaTime);
+    backButton_.update(deltaTime, reduced); restartButton_.update(deltaTime, reduced);
+    newMatchButton_.update(deltaTime, reduced);
+    exitYesButton_.update(deltaTime, reduced); exitNoButton_.update(deltaTime, reduced);
+    resultOverlay_.update(deltaTime);
 
     if (!resultOverlay_.visible() && !exitConfirmation_ && session_.isComputerTurn() && !aiPending_) scheduleAI();
     if (aiPending_ && !exitConfirmation_) {
@@ -170,6 +185,7 @@ void TicTacToeGameScene::onActivate()
 {
     exitConfirmation_ = false;
     resultOverlay_.hide();
+    backButton_.setHovered(false); restartButton_.setHovered(false); newMatchButton_.setHovered(false);
     resetVisualState();
     scheduleAI();
 }
@@ -178,8 +194,8 @@ std::optional<Position> TicTacToeGameScene::cellAt(sf::Vector2f point) const
 {
     const sf::FloatRect bounds(boardPosition_, {Theme::boardSize, Theme::boardSize});
     if (!bounds.contains(point)) return std::nullopt;
-    return Position{static_cast<std::size_t>((point.y - boardPosition_.y) / cellSize),
-                    static_cast<std::size_t>((point.x - boardPosition_.x) / cellSize)};
+    return Position{std::min<std::size_t>(2, static_cast<std::size_t>((point.y - boardPosition_.y) / cellSize)),
+                    std::min<std::size_t>(2, static_cast<std::size_t>((point.x - boardPosition_.x) / cellSize))};
 }
 
 bool TicTacToeGameScene::humanMayPlay() const
@@ -190,9 +206,15 @@ bool TicTacToeGameScene::humanMayPlay() const
 
 void TicTacToeGameScene::tryMove(Position position)
 {
-    if (!humanMayPlay() || !session_.playMove(position)) return;
+    if (!humanMayPlay()) return;
+    const Cell mark = session_.currentTurn();
+    if (!session_.playMove(position)) {
+        context_.play(SoundId::UiError);
+        return;
+    }
     lastMove_ = position;
     markAnimation_ = 0.f;
+    playMoveFeedback(mark);
     if (session_.board().status() != GameStatus::InProgress) { resultOverlay_.show(session_); recordIfComplete(); }
     else if (session_.isComputerTurn()) scheduleAI();
 }
@@ -212,12 +234,28 @@ void TicTacToeGameScene::cancelAI()
 void TicTacToeGameScene::performAI()
 {
     if (!aiPending_ || !session_.isComputerTurn()) { cancelAI(); return; }
+    const Cell mark = session_.currentTurn();
     const auto move = ai_.chooseMove(session_.board(), session_.computerMark(), session_.config().difficulty);
     cancelAI();
     if (!move || !session_.playMove(*move)) return;
     lastMove_ = *move;
     markAnimation_ = 0.f;
+    playMoveFeedback(mark);
     if (session_.board().status() != GameStatus::InProgress) { resultOverlay_.show(session_); recordIfComplete(); }
+}
+
+void TicTacToeGameScene::playMoveFeedback(Cell mark)
+{
+    context_.play(mark == Cell::X ? SoundId::MovePrimary : SoundId::MoveSecondary);
+    const auto status = session_.board().status();
+    if (status == GameStatus::InProgress) return;
+    if (status == GameStatus::Draw) {
+        context_.play(SoundId::RoundDraw);
+        return;
+    }
+    const Cell winner = status == GameStatus::XWon ? Cell::X : Cell::O;
+    const bool computerWon = session_.config().mode == GameMode::HumanVsComputer && winner == session_.computerMark();
+    context_.play(computerWon ? SoundId::RoundLoss : SoundId::RoundWin);
 }
 
 void TicTacToeGameScene::handleResultAction(TicTacToeResultAction action)
@@ -227,8 +265,12 @@ void TicTacToeGameScene::handleResultAction(TicTacToeResultAction action)
     if (action == TicTacToeResultAction::NextRound) session_.nextRound();
     else if (action == TicTacToeResultAction::RestartRound) session_.restartRound();
     else if (action == TicTacToeResultAction::Rematch) { session_.rematch(); matchRecorder_.restartTicTacToe(session_.config()); }
-    else if (action == TicTacToeResultAction::NewSetup) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::TicTacToeSetup); return; }
-    else if (action == TicTacToeResultAction::ReturnToLibrary) { matchRecorder_.abandon(); sceneManager_.switchTo(SceneId::GameLibrary); return; }
+    else if (action == TicTacToeResultAction::NewSetup) {
+        matchRecorder_.abandon(); context_.play(SoundId::UiBack); context_.scenes.switchTo(SceneId::TicTacToeSetup); return;
+    } else if (action == TicTacToeResultAction::ReturnToLibrary) {
+        matchRecorder_.abandon(); context_.play(SoundId::UiBack); context_.scenes.switchTo(SceneId::GameLibrary); return;
+    }
+    context_.play(SoundId::UiConfirm);
     resetVisualState(); scheduleAI();
 }
 
@@ -244,7 +286,18 @@ void TicTacToeGameScene::requestLibraryExit()
     cancelAI();
     exitConfirmation_ = true;
     exitYesSelected_ = false;
+    exitYesButton_.setHovered(false); exitNoButton_.setHovered(false);
+    context_.play(SoundId::UiBack);
     updateButtonStates();
+}
+
+void TicTacToeGameScene::leaveToLibrary()
+{
+    cancelAI();
+    matchRecorder_.abandon();
+    exitConfirmation_ = false;
+    context_.play(SoundId::UiBack);
+    context_.scenes.switchTo(SceneId::GameLibrary);
 }
 
 void TicTacToeGameScene::updateButtonStates()
@@ -276,6 +329,7 @@ void TicTacToeGameScene::drawBoard(sf::RenderTarget& target) const
     board.setPosition(boardPosition_); board.setFillColor(Theme::backgroundRaised);
     board.setOutlineThickness(2.f); board.setOutlineColor(Theme::border); target.draw(board);
 
+    const bool reduced = context_.reducedMotion();
     for (std::size_t row = 0; row < 3; ++row) {
         for (std::size_t column = 0; column < 3; ++column) {
             const Position position{row, column};
@@ -291,7 +345,8 @@ void TicTacToeGameScene::drawBoard(sf::RenderTarget& target) const
                 highlight.setPosition({topLeft.x + 4.f, topLeft.y + 4.f});
                 if (winning) highlight.setFillColor(Theme::winningCell);
                 else {
-                    const auto alpha = static_cast<std::uint8_t>(20 + 10 * (0.5f + 0.5f * std::sin(selectionPulse_ * 4.f)));
+                    const float pulse = reduced ? 0.5f : 0.5f + 0.5f * std::sin(selectionPulse_ * 4.f);
+                    const auto alpha = static_cast<std::uint8_t>(20 + 10 * pulse);
                     highlight.setFillColor({Theme::primary.r, Theme::primary.g, Theme::primary.b, alpha});
                     highlight.setOutlineThickness(2.f); highlight.setOutlineColor(Theme::primaryBright);
                 }

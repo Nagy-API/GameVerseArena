@@ -5,14 +5,14 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 
-PingPongPauseOverlay::PingPongPauseOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont)
-    : shade_(Theme::logicalSize), panel_({650.f, 500.f}),
-      eyebrow_(semiboldFont, "MATCH PAUSED", Theme::labelSize), title_(semiboldFont, "Take a breather", 40),
-      message_(regularFont, "The simulation and serve clock are stopped.", Theme::bodySize),
-      buttons_{UiButton(semiboldFont, "Resume", {390.f, 54.f}),
-               UiButton(semiboldFont, "Restart Match", {390.f, 54.f}),
-               UiButton(semiboldFont, "New Setup", {390.f, 54.f}),
-               UiButton(semiboldFont, "Return to Library", {390.f, 54.f})}
+PingPongPauseOverlay::PingPongPauseOverlay(AppContext& context)
+    : context_(context), shade_(Theme::logicalSize), panel_({650.f, 500.f}),
+      eyebrow_(context.semiboldFont, "MATCH PAUSED", Theme::labelSize), title_(context.semiboldFont, "Take a breather", 40),
+      message_(context.regularFont, "The simulation and serve clock are stopped.", Theme::bodySize),
+      buttons_{UiButton(context.semiboldFont, "Resume", {390.f, 54.f}),
+               UiButton(context.semiboldFont, "Restart Match", {390.f, 54.f}),
+               UiButton(context.semiboldFont, "New Setup", {390.f, 54.f}),
+               UiButton(context.semiboldFont, "Return to Library", {390.f, 54.f})}
 {
     shade_.setFillColor(Theme::overlay); panel_.setPosition({315.f, 110.f});
     panel_.setFillColor(Theme::backgroundRaised); panel_.setOutlineThickness(1.f); panel_.setOutlineColor(Theme::arcadeLeft);
@@ -28,15 +28,17 @@ PingPongPauseAction PingPongPauseOverlay::handleEvent(const sf::Event& event, sf
 {
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Escape) return PingPongPauseAction::Resume;
-        if (key->code == sf::Keyboard::Key::Up) select((selected_ + buttons_.size() - 1) % buttons_.size());
-        else if (key->code == sf::Keyboard::Key::Down || key->code == sf::Keyboard::Key::Tab) select((selected_ + 1) % buttons_.size());
+        if (key->code == sf::Keyboard::Key::Up || (key->code == sf::Keyboard::Key::Tab && key->shift))
+            select((selected_ + buttons_.size() - 1) % buttons_.size(), true);
+        else if (key->code == sf::Keyboard::Key::Down || key->code == sf::Keyboard::Key::Tab)
+            select((selected_ + 1) % buttons_.size(), true);
         else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) return actionFor(selected_);
     }
     if (const auto* moved = event.getIf<sf::Event::MouseMoved>()) {
         const auto point = window.mapPixelToCoords(moved->position);
         for (std::size_t index = 0; index < buttons_.size(); ++index) {
             const bool hovered = buttons_[index].contains(point); buttons_[index].setHovered(hovered);
-            if (hovered) select(index);
+            if (hovered) select(index, true);
         }
     }
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>(); click && click->button == sf::Mouse::Button::Left) {
@@ -47,15 +49,23 @@ PingPongPauseAction PingPongPauseOverlay::handleEvent(const sf::Event& event, sf
     return PingPongPauseAction::None;
 }
 
-void PingPongPauseOverlay::update(sf::Time deltaTime) { for (auto& button : buttons_) button.update(deltaTime); }
+void PingPongPauseOverlay::update(sf::Time deltaTime)
+{
+    for (auto& button : buttons_) button.update(deltaTime, context_.reducedMotion());
+}
 void PingPongPauseOverlay::draw(sf::RenderTarget& target) const
 {
     target.draw(shade_); target.draw(panel_); target.draw(eyebrow_); target.draw(title_); target.draw(message_);
     for (const auto& button : buttons_) button.draw(target);
 }
-void PingPongPauseOverlay::resetSelection() { select(0); }
-void PingPongPauseOverlay::select(std::size_t index)
+void PingPongPauseOverlay::resetSelection()
 {
+    for (auto& button : buttons_) button.setHovered(false);
+    select(0);
+}
+void PingPongPauseOverlay::select(std::size_t index, bool withSound)
+{
+    if (withSound && index != selected_) context_.play(audio::SoundId::UiFocus);
     selected_ = index;
     for (std::size_t item = 0; item < buttons_.size(); ++item) buttons_[item].setSelected(item == selected_);
 }

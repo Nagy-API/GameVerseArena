@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
@@ -15,7 +16,7 @@ public:
     enum class Mode { Create, Rename };
     enum class Result { None, Confirm, Cancel };
 
-    ProfileEditOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont);
+    explicit ProfileEditOverlay(AppContext& context);
 
     void open(Mode mode, std::string initialValue = {});
     bool isOpen() const noexcept { return open_; }
@@ -29,6 +30,7 @@ public:
 private:
     void refresh();
 
+    AppContext& context_;
     sf::RectangleShape backdrop_;
     sf::RectangleShape panel_;
     sf::RectangleShape field_;

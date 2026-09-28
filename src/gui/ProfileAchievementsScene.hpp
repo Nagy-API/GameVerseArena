@@ -1,9 +1,9 @@
 #pragma once
 
 #include "AchievementService.hpp"
+#include "AppContext.hpp"
 #include "ProfileService.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/Text.hpp>
@@ -15,8 +15,7 @@
 
 class ProfileAchievementsScene final : public Scene {
 public:
-    ProfileAchievementsScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                             SceneManager& scenes, persistence::ProfileService& profiles,
+    ProfileAchievementsScene(AppContext& context, persistence::ProfileService& profiles,
                              persistence::AchievementService& achievements,
                              std::int64_t& selectedProfileId);
 
@@ -30,11 +29,12 @@ private:
     static constexpr std::size_t visibleRows = 4;
 
     void activate(std::size_t index);
-    void select(std::size_t index);
+    void select(std::size_t index, bool withSound = false);
     void moveScroll(int direction);
     void rebuildFilter();
     bool matchesFilter(const achievements::AchievementStatus& status) const;
 
+    AppContext& context_;
     SceneManager& scenes_;
     persistence::ProfileService& profiles_;
     persistence::AchievementService& achievements_;

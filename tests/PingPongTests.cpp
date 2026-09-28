@@ -122,6 +122,10 @@ void wallCollisionTests()
     expect(simulation.state().ball.velocity.y > 0.0, "near-max-speed top wall contact is not skipped");
     expect(near(simulation.state().ball.position.y, state.field.top + state.ball.radius),
            "top wall separates the ball into the field");
+    expect(simulation.lastStepEvents().wallHit && !simulation.lastStepEvents().paddleHit,
+           "a wall bounce is reported once as a wall contact event");
+    simulation.step(fixedStep, {});
+    expect(!simulation.lastStepEvents().wallHit, "the step after a bounce reports no new wall contact");
 
     state.ball.position.y = state.field.bottom() - state.ball.radius -
                             PingPongSimulation::maximumBallSpeed * fixedStep + 0.25;
@@ -140,6 +144,7 @@ void paddleCollisionTests()
         simulation.restoreState(approachingCollisionState(
             simulation, side, 0.0, PingPongSimulation::maximumBallSpeed));
         simulation.step(fixedStep, {});
+        expect(simulation.lastStepEvents().paddleHit, "a paddle contact is reported as a paddle event");
         const auto& state = simulation.state();
         const auto& paddle = side == Side::Left ? state.leftPaddle : state.rightPaddle;
         expect(side == Side::Left ? state.ball.velocity.x > 0.0 : state.ball.velocity.x < 0.0,

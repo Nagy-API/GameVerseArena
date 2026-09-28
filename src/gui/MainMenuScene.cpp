@@ -8,16 +8,14 @@
 #include <array>
 #include <string>
 
-MainMenuScene::MainMenuScene(const sf::Font& regularFont,
-                             const sf::Font& semiboldFont,
-                             SceneManager& sceneManager,
-                             sf::RenderWindow& window)
-    : sceneManager_(sceneManager),
-      window_(window),
-      eyebrow_(semiboldFont, "WELCOME TO THE ARENA", Theme::labelSize),
-      title_(semiboldFont, "GameVerseArena", Theme::titleSize),
-      subtitle_(regularFont, "A unified C++ arena for timeless board games\nand real-time arcade experiences.", Theme::subtitleSize),
-      footer_(regularFont, "Navigate with mouse or Up / Down / Enter", Theme::labelSize),
+using audio::SoundId;
+
+MainMenuScene::MainMenuScene(AppContext& context)
+    : context_(context),
+      eyebrow_(context.semiboldFont, "WELCOME TO THE ARENA", Theme::labelSize),
+      title_(context.semiboldFont, "GameVerseArena", Theme::titleSize),
+      subtitle_(context.regularFont, "A unified C++ arena for timeless board games\nand real-time arcade experiences.", Theme::subtitleSize),
+      footer_(context.regularFont, "Navigate with mouse or Up / Down / Enter", Theme::labelSize),
       featurePanel_({520.f, 720.f}),
       glowPrimary_(230.f),
       glowSecondary_(150.f)
@@ -43,10 +41,10 @@ MainMenuScene::MainMenuScene(const sf::Font& regularFont,
     const std::array<std::string, 5> labels{"Play", "Profiles", "Settings", "About", "Exit"};
     buttons_.reserve(labels.size());
     for (std::size_t index = 0; index < labels.size(); ++index) {
-        buttons_.emplace_back(semiboldFont, labels[index], sf::Vector2f{Theme::buttonWidth, Theme::buttonHeight});
+        buttons_.emplace_back(context.semiboldFont, labels[index], sf::Vector2f{Theme::buttonWidth, Theme::buttonHeight});
         buttons_.back().setPosition({820.f, 174.f + static_cast<float>(index) * (Theme::buttonHeight + Theme::buttonGap)});
     }
-    refreshSelection();
+    select(0, false);
 }
 
 void MainMenuScene::handleEvent(const sf::Event& event, sf::RenderWindow& window)
@@ -54,12 +52,12 @@ void MainMenuScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Up) {
             moveSelection(-1);
-        } else if (key->code == sf::Keyboard::Key::Down) {
-            moveSelection(1);
-        } else if (key->code == sf::Keyboard::Key::Enter) {
+        } else if (key->code == sf::Keyboard::Key::Down || key->code == sf::Keyboard::Key::Tab) {
+            moveSelection(key->code == sf::Keyboard::Key::Tab && key->shift ? -1 : 1);
+        } else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) {
             activate(selectedIndex_);
         } else if (key->code == sf::Keyboard::Key::Escape) {
-            window_.close();
+            context_.window.close();
         }
     }
 
@@ -68,10 +66,7 @@ void MainMenuScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
         for (std::size_t index = 0; index < buttons_.size(); ++index) {
             const bool hovered = buttons_[index].contains(point);
             buttons_[index].setHovered(hovered);
-            if (hovered) {
-                selectedIndex_ = index;
-                refreshSelection();
-            }
+            if (hovered) select(index, true);
         }
     }
 
@@ -90,7 +85,7 @@ void MainMenuScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
 void MainMenuScene::update(sf::Time deltaTime)
 {
     for (auto& button : buttons_) {
-        button.update(deltaTime);
+        button.update(deltaTime, context_.reducedMotion());
     }
 }
 
@@ -112,23 +107,33 @@ void MainMenuScene::onResize(sf::Vector2u)
 {
 }
 
+void MainMenuScene::onActivate()
+{
+    for (auto& button : buttons_) button.setHovered(false);
+}
+
 void MainMenuScene::activate(std::size_t index)
 {
+    select(index, false);
     switch (index) {
     case 0:
-        sceneManager_.switchTo(SceneId::GameLibrary);
+        context_.play(SoundId::UiConfirm);
+        context_.scenes.switchTo(SceneId::GameLibrary);
         break;
     case 1:
-        sceneManager_.switchTo(SceneId::Profiles);
+        context_.play(SoundId::UiConfirm);
+        context_.scenes.switchTo(SceneId::Profiles);
         break;
     case 2:
-        sceneManager_.switchTo(SceneId::Settings);
+        context_.play(SoundId::UiConfirm);
+        context_.scenes.switchTo(SceneId::Settings);
         break;
     case 3:
-        sceneManager_.switchTo(SceneId::About);
+        context_.play(SoundId::UiConfirm);
+        context_.scenes.switchTo(SceneId::About);
         break;
     case 4:
-        window_.close();
+        context_.window.close();
         break;
     default:
         break;
@@ -138,13 +143,14 @@ void MainMenuScene::activate(std::size_t index)
 void MainMenuScene::moveSelection(int offset)
 {
     const int count = static_cast<int>(buttons_.size());
-    selectedIndex_ = static_cast<std::size_t>((static_cast<int>(selectedIndex_) + offset + count) % count);
-    refreshSelection();
+    select(static_cast<std::size_t>((static_cast<int>(selectedIndex_) + offset + count) % count), true);
 }
 
-void MainMenuScene::refreshSelection()
+void MainMenuScene::select(std::size_t index, bool withSound)
 {
-    for (std::size_t index = 0; index < buttons_.size(); ++index) {
-        buttons_[index].setSelected(index == selectedIndex_);
+    if (withSound && index != selectedIndex_) context_.play(SoundId::UiFocus);
+    selectedIndex_ = index;
+    for (std::size_t item = 0; item < buttons_.size(); ++item) {
+        buttons_[item].setSelected(item == selectedIndex_);
     }
 }

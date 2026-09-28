@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <ctime>
+#include <exception>
+#include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -29,20 +31,20 @@ std::string unlockedDate(std::int64_t milliseconds)
 } // namespace
 
 ProfileAchievementsScene::ProfileAchievementsScene(
-    const sf::Font& regularFont, const sf::Font& semiboldFont, SceneManager& scenes,
+    AppContext& context,
     persistence::ProfileService& profiles, persistence::AchievementService& achievements,
     std::int64_t& selectedProfileId)
-    : scenes_(scenes), profiles_(profiles), achievements_(achievements),
-      selectedProfileId_(selectedProfileId), regularFont_(regularFont), semiboldFont_(semiboldFont),
-      kicker_(semiboldFont, "PLAYER PROFILE", Theme::labelSize),
-      title_(semiboldFont, "Achievements", Theme::pageTitleSize),
-      subtitle_(regularFont, "", Theme::bodySize), summary_(semiboldFont, "", 20),
-      scrollStatus_(regularFont, "", 14),
-      buttons_{UiButton(semiboldFont, "All", {130.f, 44.f}),
-               UiButton(semiboldFont, "General", {160.f, 44.f}),
-               UiButton(semiboldFont, "Tic-Tac-Toe", {210.f, 44.f}),
-               UiButton(semiboldFont, "Ping Pong", {170.f, 44.f}),
-               UiButton(semiboldFont, "Back", {150.f, 48.f})}
+    : context_(context), scenes_(context.scenes), profiles_(profiles), achievements_(achievements),
+      selectedProfileId_(selectedProfileId), regularFont_(context.regularFont), semiboldFont_(context.semiboldFont),
+      kicker_(context.semiboldFont, "PLAYER PROFILE", Theme::labelSize),
+      title_(context.semiboldFont, "Achievements", Theme::pageTitleSize),
+      subtitle_(context.regularFont, "", Theme::bodySize), summary_(context.semiboldFont, "", 20),
+      scrollStatus_(context.regularFont, "", 14),
+      buttons_{UiButton(context.semiboldFont, "All", {130.f, 44.f}),
+               UiButton(context.semiboldFont, "General", {160.f, 44.f}),
+               UiButton(context.semiboldFont, "Tic-Tac-Toe", {210.f, 44.f}),
+               UiButton(context.semiboldFont, "Ping Pong", {170.f, 44.f}),
+               UiButton(context.semiboldFont, "Back", {150.f, 48.f})}
 {
     kicker_.setPosition({72.f, 32.f});
     kicker_.setFillColor(Theme::secondary);
@@ -78,7 +80,13 @@ void ProfileAchievementsScene::onActivate()
             [this](const auto& profile) { return profile.id == selectedProfileId_; });
     }
     subtitle_.setString(found->displayName);
-    statuses_ = achievements_.statuses(selectedProfileId_);
+    try {
+        statuses_ = achievements_.statuses(selectedProfileId_);
+    } catch (const std::exception& error) {
+        std::cerr << "GameVerseArenaGUI: achievements could not be loaded: " << error.what() << '\n';
+        statuses_.clear();
+        subtitle_.setString(found->displayName + "  |  Achievements could not be loaded; details were logged.");
+    }
     std::stable_sort(statuses_.begin(), statuses_.end(), [](const auto& left, const auto& right) {
         if (left.unlockedAt.has_value() != right.unlockedAt.has_value()) return left.unlockedAt.has_value();
         if (left.unlockedAt && right.unlockedAt) return *left.unlockedAt > *right.unlockedAt;
@@ -97,10 +105,10 @@ void ProfileAchievementsScene::handleEvent(const sf::Event& event, sf::RenderWin
 {
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Escape) activate(4);
-        else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Right)
-            select((selected_ + 1) % buttons_.size());
-        else if (key->code == sf::Keyboard::Key::Left)
-            select((selected_ + buttons_.size() - 1) % buttons_.size());
+        else if ((key->code == sf::Keyboard::Key::Tab && !key->shift) || key->code == sf::Keyboard::Key::Right)
+            select((selected_ + 1) % buttons_.size(), true);
+        else if (key->code == sf::Keyboard::Key::Left || key->code == sf::Keyboard::Key::Tab)
+            select((selected_ + buttons_.size() - 1) % buttons_.size(), true);
         else if (key->code == sf::Keyboard::Key::Up) moveScroll(-1);
         else if (key->code == sf::Keyboard::Key::Down) moveScroll(1);
         else if (key->code == sf::Keyboard::Key::PageUp) {
@@ -118,7 +126,7 @@ void ProfileAchievementsScene::handleEvent(const sf::Event& event, sf::RenderWin
         const auto point = window.mapPixelToCoords(moved->position);
         for (std::size_t index = 0; index < buttons_.size(); ++index) {
             buttons_[index].setHovered(buttons_[index].contains(point));
-            if (buttons_[index].contains(point)) select(index);
+            if (buttons_[index].contains(point)) select(index, true);
         }
     }
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
@@ -132,7 +140,7 @@ void ProfileAchievementsScene::handleEvent(const sf::Event& event, sf::RenderWin
 
 void ProfileAchievementsScene::update(sf::Time deltaTime)
 {
-    for (auto& button : buttons_) button.update(deltaTime);
+    for (auto& button : buttons_) button.update(deltaTime, context_.reducedMotion());
 }
 
 void ProfileAchievementsScene::render(sf::RenderWindow& window) const
@@ -182,13 +190,16 @@ void ProfileAchievementsScene::activate(std::size_t index)
         category_ = index;
         scroll_ = 0;
         rebuildFilter();
+        context_.play(audio::SoundId::UiConfirm);
     } else {
+        context_.play(audio::SoundId::UiBack);
         scenes_.switchTo(SceneId::ProfileStats);
     }
 }
 
-void ProfileAchievementsScene::select(std::size_t index)
+void ProfileAchievementsScene::select(std::size_t index, bool withSound)
 {
+    if (withSound && index != selected_) context_.play(audio::SoundId::UiFocus);
     selected_ = index;
     for (std::size_t button = 0; button < buttons_.size(); ++button) {
         buttons_[button].setSelected(button == selected_ || (button < 4 && button == category_));

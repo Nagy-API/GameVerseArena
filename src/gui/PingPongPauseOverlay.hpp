@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
@@ -13,16 +14,17 @@ enum class PingPongPauseAction { None, Resume, RestartMatch, NewSetup, ReturnToL
 
 class PingPongPauseOverlay {
 public:
-    PingPongPauseOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont);
+    explicit PingPongPauseOverlay(AppContext& context);
     PingPongPauseAction handleEvent(const sf::Event& event, sf::RenderWindow& window);
     void update(sf::Time deltaTime);
     void draw(sf::RenderTarget& target) const;
     void resetSelection();
 
 private:
-    void select(std::size_t index);
+    void select(std::size_t index, bool withSound = false);
     PingPongPauseAction actionFor(std::size_t index) const;
 
+    AppContext& context_;
     sf::RectangleShape shade_;
     sf::RectangleShape panel_;
     sf::Text eyebrow_;

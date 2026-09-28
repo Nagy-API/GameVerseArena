@@ -1,7 +1,7 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
@@ -9,7 +9,7 @@
 
 class GameLibraryScene final : public Scene {
 public:
-    GameLibraryScene(const sf::Font& regularFont, const sf::Font& semiboldFont, SceneManager& sceneManager);
+    explicit GameLibraryScene(AppContext& context);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
     void update(sf::Time deltaTime) override;
@@ -22,8 +22,9 @@ private:
     void openClassic();
     void openPingPong();
     void refreshSelection();
+    void select(std::size_t index, bool withSound);
 
-    SceneManager& sceneManager_;
+    AppContext& context_;
     sf::Text kicker_;
     sf::Text title_;
     sf::Text subtitle_;

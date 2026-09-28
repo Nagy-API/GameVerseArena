@@ -1,8 +1,8 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "PingPongSession.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "UiButton.hpp"
 #include "ProfileService.hpp"
 #include "MatchRecorder.hpp"
@@ -15,8 +15,7 @@
 
 class PingPongSetupScene final : public Scene {
 public:
-    PingPongSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                       SceneManager& sceneManager, ping_pong::PingPongSession& session,
+    PingPongSetupScene(AppContext& context, ping_pong::PingPongSession& session,
                        persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -31,13 +30,15 @@ private:
     static constexpr std::size_t backIndex = 5;
 
     void moveSelection(int offset);
+    void select(std::size_t index, bool withSound);
+    void goBack();
     void adjustSelected(int offset);
     void activateSelected();
     void editName(std::string& name, char32_t codepoint);
     void startMatch();
     void refresh();
 
-    SceneManager& sceneManager_;
+    AppContext& context_;
     ping_pong::PingPongSession& session_;
     persistence::ProfileService& profileService_;
     persistence::MatchRecorder& matchRecorder_;

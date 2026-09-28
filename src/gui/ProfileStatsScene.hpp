@@ -1,8 +1,8 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "ProfileService.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "StatisticsRepository.hpp"
 #include "AchievementService.hpp"
 #include "UiButton.hpp"
@@ -14,7 +14,7 @@
 
 class ProfileStatsScene final : public Scene {
 public:
-    ProfileStatsScene(const sf::Font& regularFont, const sf::Font& semiboldFont, SceneManager& scenes,
+    ProfileStatsScene(AppContext& context,
                       persistence::ProfileService& profiles, persistence::StatisticsRepository& statistics,
                       persistence::AchievementService& achievements,
                       std::int64_t& selectedProfileId);
@@ -25,7 +25,8 @@ public:
     void onActivate() override;
 private:
     void activate(std::size_t index);
-    void select(std::size_t index);
+    void select(std::size_t index, bool withSound = false);
+    AppContext& context_;
     SceneManager& scenes_;
     persistence::ProfileService& profiles_;
     persistence::StatisticsRepository& statistics_;

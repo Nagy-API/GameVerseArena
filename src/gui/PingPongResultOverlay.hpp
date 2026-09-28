@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "PingPongSession.hpp"
 #include "UiButton.hpp"
 
@@ -15,7 +16,7 @@ enum class PingPongResultAction { None, Rematch, NewSetup, ReturnToLibrary };
 
 class PingPongResultOverlay {
 public:
-    PingPongResultOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont);
+    explicit PingPongResultOverlay(AppContext& context);
     void show(const ping_pong::PingPongSession& session);
     void hide() noexcept { visible_ = false; }
     bool visible() const noexcept { return visible_; }
@@ -25,7 +26,8 @@ public:
     void draw(sf::RenderTarget& target) const;
 
 private:
-    void select(std::size_t index);
+    void select(std::size_t index, bool withSound = false);
+    AppContext& context_;
     sf::RectangleShape shade_;
     sf::RectangleShape panel_;
     sf::Text eyebrow_;

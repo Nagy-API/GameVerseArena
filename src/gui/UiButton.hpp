@@ -19,7 +19,9 @@ public:
     void setSelected(bool selected) noexcept { selected_ = selected; }
 
     bool contains(sf::Vector2f point) const;
-    void update(sf::Time deltaTime);
+    // With reduced motion the hover/focus emphasis snaps to its final state instead of
+    // easing; the final colors and accent width (the essential focus feedback) are the same.
+    void update(sf::Time deltaTime, bool reducedMotion);
     void draw(sf::RenderTarget& target) const;
 
 private:

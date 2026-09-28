@@ -81,7 +81,10 @@ std::int64_t Statement::integer(int column) const
 std::string Statement::text(int column) const
 {
     const auto* value = sqlite3_column_text(statement_, column);
-    return value != nullptr ? reinterpret_cast<const char*>(value) : std::string{};
+    if (value == nullptr) return {};
+    // Use the stored byte length so a value with an embedded NUL is not silently truncated.
+    const int bytes = sqlite3_column_bytes(statement_, column);
+    return std::string(reinterpret_cast<const char*>(value), static_cast<std::size_t>(bytes));
 }
 
 bool Statement::isNull(int column) const
@@ -193,33 +196,78 @@ std::int64_t Database::lastInsertId() const
     return sqlite3_last_insert_rowid(database_);
 }
 
+void Database::requireNoForeignKeyViolations(const char* table, const std::string& context)
+{
+    // Scoped to the table a migration rebuilt, so an unrelated pre-existing inconsistency is
+    // not misreported as a failure of this migration.
+    Statement check(database_, (std::string("PRAGMA foreign_key_check(") + table + ");").c_str());
+    if (check.step()) {
+        throw std::runtime_error("Foreign-key violation detected in table '" + std::string(table) + "' after " +
+                                 context);
+    }
+}
+
+namespace {
+std::runtime_error unsupportedVersion(int version)
+{
+    return std::runtime_error("Unsupported profile database schema version " + std::to_string(version) +
+                              "; this build supports version " + std::to_string(schema::currentVersion));
+}
+} // namespace
+
 void Database::initializeSchema()
 {
-    int version = userVersion();
-    if (version > schema::currentVersion || version < 0) {
-        throw std::runtime_error("Unsupported profile database schema version " + std::to_string(version) +
-                                 "; this build supports version " + std::to_string(schema::currentVersion));
-    }
-    if (version == 0) {
+    // Fast path without a write lock: an up-to-date or future database is never modified.
+    const int initial = userVersion();
+    if (initial == schema::currentVersion) return;
+    if (initial > schema::currentVersion || initial < 0) throw unsupportedVersion(initial);
+
+    // Each step re-reads the version inside its own BEGIN IMMEDIATE transaction, so two
+    // processes upgrading the same file concurrently apply every step exactly once.
+    while (true) {
         auto change = transaction();
-        execute(schema::createVersionOne);
+        const int version = userVersion();
+        if (version == schema::currentVersion) {
+            change.commit();
+            return;
+        }
+        if (version > schema::currentVersion || version < 0) throw unsupportedVersion(version);
+
+        switch (version) {
+        case 0: {
+            // Never adopt an unrelated SQLite file: a new profile database must be empty.
+            std::int64_t existingObjects = 0;
+            {
+                Statement objects(database_, "SELECT COUNT(*) FROM sqlite_master;");
+                if (objects.step()) existingObjects = objects.integer(0);
+            }
+            if (existingObjects != 0) {
+                throw std::runtime_error("The file is not a GameVerseArena profile database (it already contains "
+                                         "other tables) and was left unchanged");
+            }
+            execute(schema::createVersionOne);
+            break;
+        }
+        case 1:
+            execute(schema::migrateVersionOneToTwo);
+            break;
+        case 2:
+            execute(schema::migrateVersionTwoToThree);
+            break;
+        case 3:
+            execute(schema::migrateVersionThreeToFour);
+            requireNoForeignKeyViolations("matches", "the v3-to-v4 migration");
+            break;
+        default:
+            throw unsupportedVersion(version);
+        }
+        // Every step must advance the version exactly once, or a mistaken step could repeat
+        // forever while holding the write lock.
+        if (userVersion() != version + 1) {
+            throw std::runtime_error("Schema migration from version " + std::to_string(version) +
+                                     " did not advance the version");
+        }
         change.commit();
-        version = 1;
-    }
-    if (version == 1) {
-        auto change = transaction();
-        execute(schema::migrateVersionOneToTwo);
-        change.commit();
-        version = 2;
-    }
-    if (version == 2) {
-        auto change = transaction();
-        execute(schema::migrateVersionTwoToThree);
-        change.commit();
-        version = 3;
-    }
-    if (version != schema::currentVersion) {
-        throw std::runtime_error("Unsupported profile database schema version " + std::to_string(version));
     }
 }
 

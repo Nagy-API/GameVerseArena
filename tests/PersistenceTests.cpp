@@ -1,3 +1,5 @@
+#include "Schema.hpp"
+#include "TestSchemaSupport.hpp"
 #include "Database.hpp"
 #include "DatabasePaths.hpp"
 #include "ProfileService.hpp"
@@ -55,15 +57,16 @@ void expectProfileError(Action action, persistence::ProfileErrorCode code, const
 void testDatabaseSchema(const std::filesystem::path& directory)
 {
     const auto path = directory / "schema.db";
+    const int current = persistence::schema::currentVersion;
     {
         persistence::Database database(path);
-        check(database.userVersion() == 3, "new database creates schema version 3");
+        check(database.userVersion() == current, "new database creates the current schema version");
         check(database.foreignKeysEnabled(), "foreign key enforcement is enabled");
         database.execute("CREATE TABLE schema_probe(value INTEGER);");
     }
     {
         persistence::Database database(path);
-        check(database.userVersion() == 3, "version 3 database reopens");
+        check(database.userVersion() == current, "current-version database reopens");
         auto statement = database.prepare("SELECT COUNT(*) FROM sqlite_master WHERE name = 'schema_probe';");
         check(statement.step() && statement.integer(0) == 1, "clean close and reopen preserves database");
     }
@@ -71,13 +74,14 @@ void testDatabaseSchema(const std::filesystem::path& directory)
     const auto futurePath = directory / "future.db";
     {
         persistence::Database database(futurePath);
-        database.execute("PRAGMA user_version = 4;");
+        database.execute(("PRAGMA user_version = " + std::to_string(current + 1) + ";").c_str());
     }
     try {
         persistence::Database unsupported(futurePath);
         check(false, "unsupported future schema fails safely");
     } catch (const std::runtime_error& error) {
-        check(std::string(error.what()).find("Unsupported profile database schema version 4") != std::string::npos,
+        check(std::string(error.what()).find("Unsupported profile database schema version " +
+                                             std::to_string(current + 1)) != std::string::npos,
               "unsupported future schema reports its version");
     }
 }

@@ -9,6 +9,7 @@
 #include <array>
 
 using namespace ping_pong;
+using audio::SoundId;
 
 namespace {
 std::string visibleName(const std::string& value)
@@ -20,22 +21,21 @@ std::string visibleName(const std::string& value)
 }
 } // namespace
 
-PingPongSetupScene::PingPongSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                                       SceneManager& sceneManager, PingPongSession& session,
+PingPongSetupScene::PingPongSetupScene(AppContext& context, PingPongSession& session,
                                        persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder)
-    : sceneManager_(sceneManager), session_(session), profileService_(profileService), matchRecorder_(matchRecorder),
-      kicker_(semiboldFont, "ARCADE GAMES  /  PING PONG", Theme::labelSize),
-      title_(semiboldFont, "Match setup", Theme::pageTitleSize),
-      subtitle_(regularFont, "Choose your players and enter a first-to-five real-time match.", Theme::bodySize),
-      rules_(regularFont, "LEFT PADDLE\nW / S\n\nRIGHT PADDLE\nArrow Up / Arrow Down\n\nHUMAN VS COMPUTER\nBoth key pairs control the left paddle.", 17),
-      help_(regularFont, "Up / Down or Tab navigates  |  Left / Right changes  |  Enter edits or starts", Theme::labelSize),
-      labels_{sf::Text(semiboldFont, "GAME MODE", Theme::labelSize),
-              sf::Text(semiboldFont, "PLAYER 1 NAME", Theme::labelSize),
-              sf::Text(semiboldFont, "PLAYER 2 NAME", Theme::labelSize),
-              sf::Text(semiboldFont, "AI DIFFICULTY", Theme::labelSize)},
-      values_{sf::Text(regularFont, "", 22), sf::Text(regularFont, "", 22),
-              sf::Text(regularFont, "", 22), sf::Text(regularFont, "", 22)},
-      startButton_(semiboldFont, "Start Match", {250.f, 56.f}), backButton_(semiboldFont, "Back", {170.f, 56.f})
+    : context_(context), session_(session), profileService_(profileService), matchRecorder_(matchRecorder),
+      kicker_(context.semiboldFont, "ARCADE GAMES  /  PING PONG", Theme::labelSize),
+      title_(context.semiboldFont, "Match setup", Theme::pageTitleSize),
+      subtitle_(context.regularFont, "Choose your players and enter a first-to-five real-time match.", Theme::bodySize),
+      rules_(context.regularFont, "LEFT PADDLE\nW / S\n\nRIGHT PADDLE\nArrow Up / Arrow Down\n\nHUMAN VS COMPUTER\nBoth key pairs control the left paddle.", 17),
+      help_(context.regularFont, "Up / Down or Tab navigates  |  Left / Right changes  |  Enter edits or starts", Theme::labelSize),
+      labels_{sf::Text(context.semiboldFont, "GAME MODE", Theme::labelSize),
+              sf::Text(context.semiboldFont, "PLAYER 1 NAME", Theme::labelSize),
+              sf::Text(context.semiboldFont, "PLAYER 2 NAME", Theme::labelSize),
+              sf::Text(context.semiboldFont, "AI DIFFICULTY", Theme::labelSize)},
+      values_{sf::Text(context.regularFont, "", 22), sf::Text(context.regularFont, "", 22),
+              sf::Text(context.regularFont, "", 22), sf::Text(context.regularFont, "", 22)},
+      startButton_(context.semiboldFont, "Start Match", {250.f, 56.f}), backButton_(context.semiboldFont, "Back", {170.f, 56.f})
 {
     kicker_.setPosition({Theme::pageMargin, 42.f}); kicker_.setFillColor(Theme::arcadeRight);
     title_.setPosition({Theme::pageMargin, 70.f}); title_.setFillColor(Theme::textPrimary);
@@ -63,34 +63,42 @@ void PingPongSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
     }
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Escape) {
-            if (editing_) editing_ = false;
-            else sceneManager_.switchTo(SceneId::GameLibrary);
+            if (editing_) { editing_ = false; context_.play(SoundId::UiBack); }
+            else { goBack(); return; }
         } else if (key->code == sf::Keyboard::Key::Backspace && editing_) {
             auto& name = selected_ == 1 ? playerOne_ : playerTwo_;
             utf8_text::eraseLast(name);
-        } else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Down) moveSelection(1);
+        } else if (key->code == sf::Keyboard::Key::Tab) moveSelection(key->shift ? -1 : 1);
+        else if (key->code == sf::Keyboard::Key::Down) moveSelection(1);
         else if (key->code == sf::Keyboard::Key::Up) moveSelection(-1);
         else if (key->code == sf::Keyboard::Key::Left) adjustSelected(-1);
         else if (key->code == sf::Keyboard::Key::Right) adjustSelected(1);
-        else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) activateSelected();
+        else if (key->code == sf::Keyboard::Key::Enter || (key->code == sf::Keyboard::Key::Space && !editing_)) {
+            activateSelected();
+            return;
+        }
         refresh();
     }
     if (const auto* moved = event.getIf<sf::Event::MouseMoved>()) {
         const auto point = window.mapPixelToCoords(moved->position);
         startButton_.setHovered(startButton_.contains(point)); backButton_.setHovered(backButton_.contains(point));
-        for (std::size_t index = 0; index < rowCount; ++index)
-            if (rows_[index].getGlobalBounds().contains(point)) selected_ = index;
+        if (!editing_) {
+            for (std::size_t index = 0; index < rowCount; ++index)
+                if (rows_[index].getGlobalBounds().contains(point)) select(index, true);
+            if (startButton_.contains(point)) select(startIndex, true);
+            if (backButton_.contains(point)) select(backIndex, true);
+        }
         refresh();
     }
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
         click && click->button == sf::Mouse::Button::Left) {
         const auto point = window.mapPixelToCoords(click->position);
-        if (startButton_.contains(point)) { selected_ = startIndex; startMatch(); }
-        else if (backButton_.contains(point)) sceneManager_.switchTo(SceneId::GameLibrary);
-        else for (std::size_t index = 0; index < rowCount; ++index) {
+        if (startButton_.contains(point)) { select(startIndex, false); startMatch(); return; }
+        if (backButton_.contains(point)) { goBack(); return; }
+        for (std::size_t index = 0; index < rowCount; ++index) {
             if (!rows_[index].getGlobalBounds().contains(point)) continue;
-            selected_ = index;
-            if (index == 1 || (index == 2 && mode_ == 0)) editing_ = true;
+            select(index, false);
+            if (index == 1 || (index == 2 && mode_ == 0)) { editing_ = true; context_.play(SoundId::UiConfirm); }
             else adjustSelected(1);
             break;
         }
@@ -98,7 +106,11 @@ void PingPongSetupScene::handleEvent(const sf::Event& event, sf::RenderWindow& w
     }
 }
 
-void PingPongSetupScene::update(sf::Time deltaTime) { startButton_.update(deltaTime); backButton_.update(deltaTime); }
+void PingPongSetupScene::update(sf::Time deltaTime)
+{
+    startButton_.update(deltaTime, context_.reducedMotion());
+    backButton_.update(deltaTime, context_.reducedMotion());
+}
 
 void PingPongSetupScene::render(sf::RenderWindow& window) const
 {
@@ -115,34 +127,59 @@ void PingPongSetupScene::onActivate()
     if (const auto active = profileService_.activeProfile(); active.has_value()) {
         playerOne_ = active->displayName;
     }
-    editing_ = false; selected_ = 0; refresh();
+    editing_ = false; selected_ = 0;
+    startButton_.setHovered(false); backButton_.setHovered(false);
+    refresh();
+}
+
+void PingPongSetupScene::select(std::size_t index, bool withSound)
+{
+    if (withSound && index != selected_) context_.play(SoundId::UiFocus);
+    selected_ = index;
 }
 
 void PingPongSetupScene::moveSelection(int offset)
 {
     editing_ = false;
     constexpr int count = 6;
-    selected_ = static_cast<std::size_t>((static_cast<int>(selected_) + offset + count) % count);
+    select(static_cast<std::size_t>((static_cast<int>(selected_) + offset + count) % count), true);
 }
 
 void PingPongSetupScene::adjustSelected(int offset)
 {
     editing_ = false;
-    if (selected_ == 0) mode_ = (mode_ + offset + 2) % 2;
-    else if (selected_ == 3 && mode_ == 1) difficulty_ = (difficulty_ + offset + 3) % 3;
+    if (selected_ == 0) { mode_ = (mode_ + offset + 2) % 2; context_.play(SoundId::UiConfirm); }
+    else if (selected_ == 3 && mode_ == 1) { difficulty_ = (difficulty_ + offset + 3) % 3; context_.play(SoundId::UiConfirm); }
+    else if (selected_ < rowCount) context_.play(SoundId::UiError);
 }
 
 void PingPongSetupScene::activateSelected()
 {
-    if (selected_ == 1 || (selected_ == 2 && mode_ == 0)) editing_ = !editing_;
-    else if (selected_ < rowCount) adjustSelected(1);
-    else if (selected_ == startIndex) startMatch();
-    else sceneManager_.switchTo(SceneId::GameLibrary);
+    if (selected_ == 1 || (selected_ == 2 && mode_ == 0)) {
+        editing_ = !editing_;
+        context_.play(editing_ ? SoundId::UiConfirm : SoundId::UiBack);
+        refresh();
+    } else if (selected_ < rowCount) {
+        adjustSelected(1);
+        refresh();
+    } else if (selected_ == startIndex) {
+        startMatch();
+    } else {
+        goBack();
+    }
+}
+
+void PingPongSetupScene::goBack()
+{
+    editing_ = false;
+    context_.play(SoundId::UiBack);
+    context_.scenes.switchTo(SceneId::GameLibrary);
 }
 
 void PingPongSetupScene::editName(std::string& name, char32_t codepoint)
 {
-    utf8_text::appendPrintable(name, codepoint, 24);
+    if (codepoint < 32) return;  // Control characters (Enter, Backspace, Tab) are handled as keys.
+    if (!utf8_text::appendPrintable(name, codepoint, 24)) context_.play(SoundId::UiError);
 }
 
 void PingPongSetupScene::startMatch()
@@ -154,8 +191,10 @@ void PingPongSetupScene::startMatch()
     config.difficulty = static_cast<AIDifficulty>(difficulty_);
     session_.startMatch(config);
     if (const auto active = profileService_.activeProfile()) matchRecorder_.beginPingPong(*active, session_.config());
+    else matchRecorder_.abandon();
     editing_ = false;
-    sceneManager_.switchTo(SceneId::PingPongGame);
+    context_.play(SoundId::UiConfirm);
+    context_.scenes.switchTo(SceneId::PingPongGame);
 }
 
 void PingPongSetupScene::refresh()

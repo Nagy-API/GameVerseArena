@@ -1,25 +1,30 @@
 #pragma once
 
 #include "AchievementNotificationQueue.hpp"
+#include "AppContext.hpp"
 
-#include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Time.hpp>
 #include <SFML/Window/Event.hpp>
 
+#include <cstdint>
+
 class AchievementToast {
 public:
-    AchievementToast(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                     achievements::AchievementNotificationQueue& queue);
+    AchievementToast(AppContext& context, achievements::AchievementNotificationQueue& queue);
 
     bool handleEvent(const sf::Event& event, sf::RenderWindow& window);
     void update(sf::Time deltaTime);
     void render(sf::RenderTarget& target) const;
 
 private:
-    const sf::Font& regularFont_;
-    const sf::Font& semiboldFont_;
+    float slideOffset() const noexcept;
+
+    AppContext& context_;
     achievements::AchievementNotificationQueue& queue_;
     sf::RectangleShape panel_;
+    std::uint64_t shownSequence_{};
+    float slide_{1.f};
+    bool pressStartedOnToast_{false};
 };

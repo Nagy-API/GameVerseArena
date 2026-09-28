@@ -9,13 +9,13 @@
 
 using namespace classic_ttt;
 
-TicTacToeResultOverlay::TicTacToeResultOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont)
-    : shade_(Theme::logicalSize), panel_({700.f, 450.f}),
-      eyebrow_(semiboldFont, "ROUND COMPLETE", Theme::labelSize),
-      title_(semiboldFont, "", 40), roundResult_(regularFont, "", Theme::bodySize),
-      score_(semiboldFont, "", 20), warning_(regularFont, "", 14),
-      buttons_{UiButton(semiboldFont, "", {410.f, 54.f}), UiButton(semiboldFont, "", {410.f, 54.f}),
-               UiButton(semiboldFont, "", {410.f, 54.f})}
+TicTacToeResultOverlay::TicTacToeResultOverlay(AppContext& context)
+    : context_(context), shade_(Theme::logicalSize), panel_({700.f, 450.f}),
+      eyebrow_(context.semiboldFont, "ROUND COMPLETE", Theme::labelSize),
+      title_(context.semiboldFont, "", 40), roundResult_(context.regularFont, "", Theme::bodySize),
+      score_(context.semiboldFont, "", 20), warning_(context.regularFont, "", 14),
+      buttons_{UiButton(context.semiboldFont, "", {410.f, 54.f}), UiButton(context.semiboldFont, "", {410.f, 54.f}),
+               UiButton(context.semiboldFont, "", {410.f, 54.f})}
 {
     shade_.setFillColor(Theme::overlay);
     panel_.setPosition({290.f, 135.f});
@@ -59,6 +59,7 @@ void TicTacToeResultOverlay::show(const TicTacToeSession& session)
         buttons_[0].setText("Next Round"); buttons_[1].setText("Restart Round");
     }
     buttons_[2].setText("Return to Library");
+    for (auto& button : buttons_) button.setHovered(false);
     select(0);
 }
 
@@ -66,8 +67,8 @@ TicTacToeResultAction TicTacToeResultOverlay::handleEvent(const sf::Event& event
 {
     if (!visible_) return TicTacToeResultAction::None;
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
-        if (key->code == sf::Keyboard::Key::Up) select((selected_ + 2) % 3);
-        else if (key->code == sf::Keyboard::Key::Down || key->code == sf::Keyboard::Key::Tab) select((selected_ + 1) % 3);
+        if (key->code == sf::Keyboard::Key::Up || (key->code == sf::Keyboard::Key::Tab && key->shift)) select((selected_ + 2) % 3, true);
+        else if (key->code == sf::Keyboard::Key::Down || key->code == sf::Keyboard::Key::Tab) select((selected_ + 1) % 3, true);
         else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) return actionFor(selected_);
     }
     if (const auto* moved = event.getIf<sf::Event::MouseMoved>()) {
@@ -75,7 +76,7 @@ TicTacToeResultAction TicTacToeResultOverlay::handleEvent(const sf::Event& event
         for (std::size_t index = 0; index < buttons_.size(); ++index) {
             const bool hovered = buttons_[index].contains(point);
             buttons_[index].setHovered(hovered);
-            if (hovered) select(index);
+            if (hovered) select(index, true);
         }
     }
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
@@ -89,7 +90,7 @@ TicTacToeResultAction TicTacToeResultOverlay::handleEvent(const sf::Event& event
 
 void TicTacToeResultOverlay::update(sf::Time deltaTime)
 {
-    if (visible_) for (auto& button : buttons_) button.update(deltaTime);
+    if (visible_) for (auto& button : buttons_) button.update(deltaTime, context_.reducedMotion());
 }
 
 void TicTacToeResultOverlay::draw(sf::RenderTarget& target) const
@@ -100,8 +101,9 @@ void TicTacToeResultOverlay::draw(sf::RenderTarget& target) const
     for (const auto& button : buttons_) button.draw(target);
 }
 
-void TicTacToeResultOverlay::select(std::size_t index)
+void TicTacToeResultOverlay::select(std::size_t index, bool withSound)
 {
+    if (withSound && index != selected_) context_.play(audio::SoundId::UiFocus);
     selected_ = index;
     for (std::size_t item = 0; item < buttons_.size(); ++item) buttons_[item].setSelected(item == selected_);
 }

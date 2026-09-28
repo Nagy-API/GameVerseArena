@@ -5,8 +5,8 @@
 #include "PingPongResultOverlay.hpp"
 #include "PingPongSession.hpp"
 #include "PingPongSimulation.hpp"
+#include "AppContext.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "UiButton.hpp"
 #include "MatchRecorder.hpp"
 #include "AchievementService.hpp"
@@ -19,8 +19,7 @@
 
 class PingPongGameScene final : public Scene {
 public:
-    PingPongGameScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                      SceneManager& sceneManager, ping_pong::PingPongSession& session,
+    PingPongGameScene(AppContext& context, ping_pong::PingPongSession& session,
                       persistence::MatchRecorder& matchRecorder,
                       persistence::AchievementService& achievements,
                       achievements::AchievementNotificationQueue& notifications);
@@ -30,6 +29,10 @@ public:
     void render(sf::RenderWindow& window) const override;
     void onResize(sf::Vector2u size) override;
     void onActivate() override;
+
+    // Read-only diagnostics used by the GUI smoke test.
+    bool paused() const noexcept { return paused_; }
+    const ping_pong::SimulationState& simulationState() const noexcept { return simulation_.state(); }
 
 private:
     struct HeldInput {
@@ -48,6 +51,7 @@ private:
     void handlePauseAction(PingPongPauseAction action);
     void handleResultAction(PingPongResultAction action);
     void recordIfComplete();
+    void playMatchResultSound();
     void drawPlayfield(sf::RenderTarget& target) const;
     void drawCentered(sf::RenderTarget& target, const std::string& value, sf::Vector2f center,
                       unsigned int size, const sf::Color& color, bool strong = false) const;
@@ -55,7 +59,7 @@ private:
     static constexpr double fixedStep = 1.0 / 120.0;
     static constexpr int maximumCatchUpSteps = 8;
 
-    SceneManager& sceneManager_;
+    AppContext& context_;
     ping_pong::PingPongSession& session_;
     persistence::MatchRecorder& matchRecorder_;
     persistence::AchievementService& achievements_;

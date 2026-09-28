@@ -3,7 +3,37 @@
 #include <stdexcept>
 
 namespace persistence {
-const char* toStorage(GameKey value) noexcept { return value == GameKey::ClassicTicTacToe ? "classic_tic_tac_toe" : "ping_pong"; }
+const std::vector<GameKey>& allGameKeys()
+{
+    static const std::vector<GameKey> keys{
+        GameKey::ClassicTicTacToe, GameKey::NumericalTicTacToe, GameKey::Sus, GameKey::FiveByFiveTicTacToe,
+        GameKey::MisereTicTacToe, GameKey::FourInARow, GameKey::FourByFourTicTacToe, GameKey::WordTicTacToe,
+        GameKey::PyramidTicTacToe, GameKey::Diamond, GameKey::InfinityXo, GameKey::UltimateXo, GameKey::MemoryXo,
+        GameKey::ObstacleTicTacToe, GameKey::PingPong};
+    return keys;
+}
+
+const char* toStorage(GameKey value) noexcept
+{
+    switch (value) {
+    case GameKey::ClassicTicTacToe: return "classic_tic_tac_toe";
+    case GameKey::NumericalTicTacToe: return "numerical_tic_tac_toe";
+    case GameKey::Sus: return "sus";
+    case GameKey::FiveByFiveTicTacToe: return "five_by_five_tic_tac_toe";
+    case GameKey::MisereTicTacToe: return "misere_tic_tac_toe";
+    case GameKey::FourInARow: return "four_in_a_row";
+    case GameKey::FourByFourTicTacToe: return "four_by_four_tic_tac_toe";
+    case GameKey::WordTicTacToe: return "word_tic_tac_toe";
+    case GameKey::PyramidTicTacToe: return "pyramid_tic_tac_toe";
+    case GameKey::Diamond: return "diamond";
+    case GameKey::InfinityXo: return "infinity_xo";
+    case GameKey::UltimateXo: return "ultimate_xo";
+    case GameKey::MemoryXo: return "memory_xo";
+    case GameKey::ObstacleTicTacToe: return "obstacle_tic_tac_toe";
+    case GameKey::PingPong: return "ping_pong";
+    }
+    return "classic_tic_tac_toe";
+}
 const char* toStorage(MatchMode value) noexcept { return value == MatchMode::HumanVsHuman ? "human_vs_human" : "human_vs_computer"; }
 const char* toStorage(MatchResult value) noexcept
 {
@@ -16,12 +46,14 @@ const char* toStorage(DifficultyKey value) noexcept
     if (value == DifficultyKey::Easy) return "easy";
     if (value == DifficultyKey::Medium) return "medium";
     if (value == DifficultyKey::Hard) return "hard";
+    if (value == DifficultyKey::Standard) return "standard";
     return "none";
 }
 GameKey gameKeyFromStorage(const std::string& value)
 {
-    if (value == "classic_tic_tac_toe") return GameKey::ClassicTicTacToe;
-    if (value == "ping_pong") return GameKey::PingPong;
+    for (const auto key : allGameKeys()) {
+        if (value == toStorage(key)) return key;
+    }
     throw std::runtime_error("Unknown stored game key");
 }
 MatchMode matchModeFromStorage(const std::string& value)
@@ -43,6 +75,7 @@ DifficultyKey difficultyFromStorage(const std::string& value)
     if (value == "easy") return DifficultyKey::Easy;
     if (value == "medium") return DifficultyKey::Medium;
     if (value == "hard") return DifficultyKey::Hard;
+    if (value == "standard") return DifficultyKey::Standard;
     throw std::runtime_error("Unknown stored difficulty");
 }
 } // namespace persistence

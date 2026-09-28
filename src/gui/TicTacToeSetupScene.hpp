@@ -1,7 +1,7 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "Scene.hpp"
-#include "SceneManager.hpp"
 #include "TicTacToeSession.hpp"
 #include "UiButton.hpp"
 #include "ProfileService.hpp"
@@ -16,8 +16,7 @@
 
 class TicTacToeSetupScene final : public Scene {
 public:
-    TicTacToeSetupScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                        SceneManager& sceneManager, classic_ttt::TicTacToeSession& session,
+    TicTacToeSetupScene(AppContext& context, classic_ttt::TicTacToeSession& session,
                         persistence::ProfileService& profileService, persistence::MatchRecorder& matchRecorder);
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -32,13 +31,15 @@ private:
     static constexpr std::size_t backIndex = 7;
 
     void moveSelection(int offset);
+    void select(std::size_t index, bool withSound);
+    void goBack();
     void adjustSelected(int offset);
     void activateSelected();
     void startMatch();
     void refresh();
     void editName(std::string& name, char32_t codepoint);
 
-    SceneManager& sceneManager_;
+    AppContext& context_;
     classic_ttt::TicTacToeSession& session_;
     persistence::ProfileService& profileService_;
     persistence::MatchRecorder& matchRecorder_;

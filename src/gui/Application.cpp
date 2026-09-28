@@ -1,39 +1,38 @@
 #include "Application.hpp"
 
 #include "AboutScene.hpp"
+#include "DatabasePaths.hpp"
 #include "GameLibraryScene.hpp"
 #include "MainMenuScene.hpp"
+#include "MatchHistoryScene.hpp"
+#include "PingPongGameScene.hpp"
+#include "PingPongSetupScene.hpp"
+#include "ProfileAchievementsScene.hpp"
+#include "ProfileStatsScene.hpp"
+#include "ProfilesScene.hpp"
 #include "SettingsScene.hpp"
+#include "SmokeTestDriver.hpp"
 #include "Theme.hpp"
 #include "TicTacToeGameScene.hpp"
 #include "TicTacToeSetupScene.hpp"
-#include "PingPongGameScene.hpp"
-#include "PingPongSetupScene.hpp"
-#include "ProfilesScene.hpp"
-#include "ProfileStatsScene.hpp"
-#include "MatchHistoryScene.hpp"
-#include "ProfileAchievementsScene.hpp"
-#include "DatabasePaths.hpp"
-#include "AchievementToast.hpp"
 
+#include <SFML/Graphics/Image.hpp>
+#include <SFML/Graphics/Texture.hpp>
 #include <SFML/Graphics/View.hpp>
 #include <SFML/System/Clock.hpp>
 
+#include "ErrorDialog.hpp"
+
 #include <algorithm>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <utility>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
-Application::Application(std::filesystem::path executableDirectory,
-                         std::optional<std::filesystem::path> databasePath)
+Application::Application(std::filesystem::path executableDirectory, ApplicationOptions options)
     : executableDirectory_(std::move(executableDirectory)),
-      databasePath_(std::move(databasePath)),
+      options_(std::move(options)),
       window_(sf::VideoMode({1280u, 720u}), "GameVerseArena")
 {
     window_.setMinimumSize(sf::Vector2u{960u, 540u});
@@ -49,60 +48,116 @@ int Application::run()
     }
 
     updateView(window_.getSize());
-    sf::Clock clock;
+    try {
+        return runLoop();
+    } catch (const std::exception& error) {
+        // Last resort: a failure that escaped a scene is reported instead of terminating
+        // silently. Completed matches were already saved when they finished.
+        if (audio_) audio_->stopAll();
+        window_.close();
+        reportFatal("Unexpected error", std::string("GameVerseArena stopped because of an unexpected error. "
+                                                    "Completed matches and settings saved earlier are kept.\n\n") +
+                                            error.what());
+        return 1;
+    }
+}
 
-    while (window_.isOpen()) {
-        while (const auto event = window_.pollEvent()) {
-            if (event->is<sf::Event::Closed>()) {
-                window_.close();
-                continue;
-            }
-
-            if (const auto* resized = event->getIf<sf::Event::Resized>()) {
-                updateView(resized->size);
-                scenes_.active().onResize(resized->size);
-            }
-
-            if (achievementToast_ && achievementToast_->handleEvent(*event, window_)) {
-                continue;
-            }
-
-            if (window_.isOpen()) {
-                scenes_.active().handleEvent(*event, window_);
-            }
-        }
-
-        const auto deltaTime = sf::seconds(std::min(clock.restart().asSeconds(), 0.05f));
-        scenes_.active().update(deltaTime);
-        achievementToast_->update(deltaTime);
-
-        window_.clear(Theme::background);
-        scenes_.active().render(window_);
-        achievementToast_->render(window_);
-        window_.display();
+int Application::runLoop()
+{
+    if (options_.smokeTestDirectory) {
+        SmokeTestDriver driver(*this, *options_.smokeTestDirectory);
+        const int result = driver.run();
+        if (audio_) audio_->stopAll();
+        window_.close();
+        return result;
     }
 
+    sf::Clock clock;
+    while (window_.isOpen()) {
+        while (const auto event = window_.pollEvent()) {
+            dispatch(*event);
+        }
+        advanceFrame(sf::seconds(std::min(clock.restart().asSeconds(), 0.05f)));
+    }
+
+    if (audio_) audio_->stopAll();
     return 0;
+}
+
+void Application::dispatch(const sf::Event& event)
+{
+    if (event.is<sf::Event::Closed>()) {
+        window_.close();
+        return;
+    }
+    if (const auto* resized = event.getIf<sf::Event::Resized>()) {
+        updateView(resized->size);
+        scenes_.active().onResize(resized->size);
+    }
+    if (achievementToast_ && achievementToast_->handleEvent(event, window_)) {
+        return;
+    }
+    if (window_.isOpen()) {
+        scenes_.active().handleEvent(event, window_);
+    }
+}
+
+void Application::advanceFrame(sf::Time deltaTime, const std::filesystem::path* capturePath)
+{
+    scenes_.active().update(deltaTime);
+    achievementToast_->update(deltaTime);
+
+    window_.clear(Theme::background);
+    scenes_.active().render(window_);
+    achievementToast_->render(window_);
+    if (capturePath != nullptr) {
+        sf::Texture capture;
+        if (capture.resize(window_.getSize())) {
+            capture.update(window_);
+            if (!capture.copyToImage().saveToFile(*capturePath)) {
+                std::cerr << "GameVerseArenaGUI: could not save capture " << capturePath->string() << '\n';
+            }
+        }
+    }
+    window_.display();
+}
+
+void Application::reportFatal(const std::string& title, const std::string& message) const
+{
+    std::cerr << "GameVerseArenaGUI: " << message << '\n';
+    // Unattended smoke-test runs report through stderr and the exit code only.
+    if (!options_.smokeTestDirectory) showErrorDialog("GameVerseArenaGUI - " + title, message);
 }
 
 bool Application::initialize()
 {
     std::string error;
     if (!assets_.load(executableDirectory_ / "assets", error)) {
-        std::cerr << "GameVerseArenaGUI: " << error << '\n';
-#ifdef _WIN32
-        MessageBoxA(nullptr, error.c_str(), "GameVerseArenaGUI - Missing asset", MB_OK | MB_ICONERROR);
-#endif
+        reportFatal("Missing asset", error + "\n\nReinstall or re-extract GameVerseArena so the assets folder "
+                                             "sits beside the executable.");
         return false;
     }
 
     try {
-        const auto path = databasePath_.has_value()
-            ? *databasePath_
+        audio_ = std::make_unique<AudioEngine>(options_.silentAudio ? AudioEngine::Output::NullDevice
+                                                                    : AudioEngine::Output::DefaultDevice);
+    } catch (const std::exception& exception) {
+        reportFatal("Audio error", std::string("The audio system could not be created.\n\n") + exception.what());
+        return false;
+    }
+
+    bool opened = false;
+    try {
+        const auto path = options_.databasePath.has_value()
+            ? *options_.databasePath
             : persistence::DatabasePaths::productionDatabasePath();
         database_ = std::make_unique<persistence::Database>(path);
+        opened = true;
         profileService_ = std::make_unique<persistence::ProfileService>(*database_);
         profileService_->bootstrap();
+        settingsService_ = std::make_unique<persistence::SettingsService>(*database_);
+        settings_ = std::make_unique<SettingsController>(*settingsService_, *audio_);
+        settings_->load();
         matchService_ = std::make_unique<persistence::MatchService>(*database_);
         ticTacToeRecorder_ = std::make_unique<persistence::MatchRecorder>(*matchService_);
         pingPongRecorder_ = std::make_unique<persistence::MatchRecorder>(*matchService_);
@@ -110,46 +165,44 @@ bool Application::initialize()
         statisticsRepository_ = std::make_unique<persistence::StatisticsRepository>(*database_);
         achievementService_ = std::make_unique<persistence::AchievementService>(*database_);
         achievementService_->backfillAll();
-        achievementToast_ = std::make_unique<AchievementToast>(
-            assets_.regularFont(), assets_.semiboldFont(), achievementNotifications_);
     } catch (const std::exception& exception) {
-        const std::string error = std::string("Player profiles could not be initialized.\n\n") + exception.what();
-        std::cerr << "GameVerseArenaGUI: " << error << '\n';
-#ifdef _WIN32
-        MessageBoxA(nullptr, error.c_str(), "GameVerseArenaGUI - Profile database error", MB_OK | MB_ICONERROR);
-#endif
+        const std::string explanation = opened
+            ? "The local profile database opened, but loading profiles, settings, or achievements failed, so "
+              "GameVerseArena has stopped. No match history was deleted.\n\n"
+            : "The local profile database could not be opened or upgraded, so GameVerseArena has stopped. "
+              "An upgrade step that could not finish was rolled back and no data was deleted.\n\n";
+        reportFatal("Profile database error", explanation + exception.what());
         return false;
     }
 
-    scenes_.add(SceneId::MainMenu, std::make_unique<MainMenuScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, window_));
-    scenes_.add(SceneId::Profiles, std::make_unique<ProfilesScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_, selectedStatsProfileId_));
+    context_ = std::make_unique<AppContext>(AppContext{
+        assets_.regularFont(), assets_.semiboldFont(), scenes_, window_, *audio_, *settings_});
+    achievementToast_ = std::make_unique<AchievementToast>(*context_, achievementNotifications_);
+
+    auto& context = *context_;
+    scenes_.add(SceneId::MainMenu, std::make_unique<MainMenuScene>(context));
+    scenes_.add(SceneId::Profiles, std::make_unique<ProfilesScene>(context, *profileService_, selectedStatsProfileId_));
     scenes_.add(SceneId::ProfileStats, std::make_unique<ProfileStatsScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_,
-        *statisticsRepository_, *achievementService_, selectedStatsProfileId_));
+        context, *profileService_, *statisticsRepository_, *achievementService_, selectedStatsProfileId_));
     scenes_.add(SceneId::ProfileAchievements, std::make_unique<ProfileAchievementsScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_,
-        *achievementService_, selectedStatsProfileId_));
+        context, *profileService_, *achievementService_, selectedStatsProfileId_));
     scenes_.add(SceneId::MatchHistory, std::make_unique<MatchHistoryScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, *profileService_,
-        *matchRepository_, selectedStatsProfileId_));
-    scenes_.add(SceneId::GameLibrary, std::make_unique<GameLibraryScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_));
+        context, *profileService_, *matchRepository_, selectedStatsProfileId_));
+    scenes_.add(SceneId::GameLibrary, std::make_unique<GameLibraryScene>(context));
     scenes_.add(SceneId::TicTacToeSetup, std::make_unique<TicTacToeSetupScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_, *profileService_, *ticTacToeRecorder_));
+        context, ticTacToeSession_, *profileService_, *ticTacToeRecorder_));
     scenes_.add(SceneId::TicTacToeGame, std::make_unique<TicTacToeGameScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, ticTacToeSession_, *ticTacToeRecorder_,
-        *achievementService_, achievementNotifications_));
+        context, ticTacToeSession_, *ticTacToeRecorder_, *achievementService_, achievementNotifications_));
     scenes_.add(SceneId::PingPongSetup, std::make_unique<PingPongSetupScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_, *profileService_, *pingPongRecorder_));
+        context, pingPongSession_, *profileService_, *pingPongRecorder_));
     scenes_.add(SceneId::PingPongGame, std::make_unique<PingPongGameScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_, pingPongSession_, *pingPongRecorder_,
-        *achievementService_, achievementNotifications_));
-    scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_));
+        context, pingPongSession_, *pingPongRecorder_, *achievementService_, achievementNotifications_));
+    scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(context));
     scenes_.add(SceneId::About, std::make_unique<AboutScene>(
-        assets_.regularFont(), assets_.semiboldFont(), scenes_));
+        context,
+        "Classic Tic-Tac-Toe and Ping Pong demonstrate two distinct graphical game loops.\n"
+        "All 14 original board games remain fully available in the separate console application;\n"
+        "the other 13 board games are still awaiting graphical migration."));
     scenes_.switchTo(SceneId::MainMenu);
     return true;
 }

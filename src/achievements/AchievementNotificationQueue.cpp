@@ -13,9 +13,11 @@ AchievementNotificationQueue::AchievementNotificationQueue(float displaySeconds)
 
 void AchievementNotificationQueue::enqueue(const std::vector<AchievementDefinition>& achievements)
 {
+    const bool wasEmpty = pending_.empty();
     for (const auto& achievement : achievements) {
         if (!contains(achievement.key)) pending_.push_back(achievement);
     }
+    if (wasEmpty && !pending_.empty()) ++sequence_;
 }
 
 void AchievementNotificationQueue::update(float deltaSeconds)
@@ -27,7 +29,10 @@ void AchievementNotificationQueue::update(float deltaSeconds)
 
 void AchievementNotificationQueue::dismiss()
 {
-    if (!pending_.empty()) pending_.pop_front();
+    if (!pending_.empty()) {
+        pending_.pop_front();
+        if (!pending_.empty()) ++sequence_;
+    }
     elapsed_ = 0.f;
 }
 

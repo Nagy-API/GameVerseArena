@@ -47,11 +47,15 @@ bool UiButton::contains(sf::Vector2f point) const
     return background_.getGlobalBounds().contains(point);
 }
 
-void UiButton::update(sf::Time deltaTime)
+void UiButton::update(sf::Time deltaTime, bool reducedMotion)
 {
     const float target = (hovered_ || selected_) ? 1.f : 0.f;
-    const float step = std::min(1.f, Theme::animationSpeed * deltaTime.asSeconds());
-    emphasis_ += (target - emphasis_) * step;
+    if (reducedMotion) {
+        emphasis_ = target;
+    } else {
+        const float step = std::min(1.f, Theme::animationSpeed * deltaTime.asSeconds());
+        emphasis_ += (target - emphasis_) * step;
+    }
 
     background_.setFillColor(blend(Theme::panel, Theme::panelHover, emphasis_));
     background_.setOutlineColor(blend(Theme::border, Theme::primaryBright, emphasis_));

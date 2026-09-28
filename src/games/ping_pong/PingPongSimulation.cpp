@@ -58,6 +58,7 @@ void PingPongSimulation::resetForServe()
 
 std::optional<Side> PingPongSimulation::step(double seconds, const ControlInput& input)
 {
+    lastEvents_ = {};
     if (seconds <= 0.0 || pointAwarded_) return std::nullopt;
 
     movePaddle(state_.leftPaddle, input.left, input.leftSpeedScale, seconds);
@@ -76,9 +77,10 @@ std::optional<Side> PingPongSimulation::step(double seconds, const ControlInput&
         return Side::Left;
     }
 
-    resolveWalls();
-    resolvePaddle(state_.leftPaddle, Side::Left);
-    resolvePaddle(state_.rightPaddle, Side::Right);
+    lastEvents_.wallHit = resolveWalls();
+    const bool leftHit = resolvePaddle(state_.leftPaddle, Side::Left);
+    const bool rightHit = resolvePaddle(state_.rightPaddle, Side::Right);
+    lastEvents_.paddleHit = leftHit || rightHit;
     return std::nullopt;
 }
 
@@ -86,6 +88,7 @@ void PingPongSimulation::restoreState(const SimulationState& state)
 {
     state_ = state;
     pointAwarded_ = false;
+    lastEvents_ = {};
 }
 
 void PingPongSimulation::movePaddle(PaddleState& paddle, Movement movement, double speedScale, double seconds)
@@ -96,17 +99,24 @@ void PingPongSimulation::movePaddle(PaddleState& paddle, Movement movement, doub
                                    state_.field.bottom() - paddle.height);
 }
 
-void PingPongSimulation::resolveWalls()
+bool PingPongSimulation::resolveWalls()
 {
     const double top = state_.field.top + state_.ball.radius;
     const double bottom = state_.field.bottom() - state_.ball.radius;
     if (state_.ball.position.y < top) {
         state_.ball.position.y = top;
-        if (state_.ball.velocity.y < 0.0) state_.ball.velocity.y = -state_.ball.velocity.y;
+        if (state_.ball.velocity.y < 0.0) {
+            state_.ball.velocity.y = -state_.ball.velocity.y;
+            return true;
+        }
     } else if (state_.ball.position.y > bottom) {
         state_.ball.position.y = bottom;
-        if (state_.ball.velocity.y > 0.0) state_.ball.velocity.y = -state_.ball.velocity.y;
+        if (state_.ball.velocity.y > 0.0) {
+            state_.ball.velocity.y = -state_.ball.velocity.y;
+            return true;
+        }
     }
+    return false;
 }
 
 bool PingPongSimulation::resolvePaddle(PaddleState& paddle, Side side)

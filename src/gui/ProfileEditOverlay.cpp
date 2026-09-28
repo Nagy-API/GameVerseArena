@@ -15,14 +15,14 @@ std::string visibleValue(const std::string& value)
 
 } // namespace
 
-ProfileEditOverlay::ProfileEditOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont)
-    : backdrop_(Theme::logicalSize), panel_({650.f, 360.f}), field_({554.f, 64.f}),
-      title_(semiboldFont, "Create profile", 32),
-      prompt_(semiboldFont, "DISPLAY NAME", Theme::labelSize),
-      valueText_(regularFont, "", 22), errorText_(regularFont, "", 16),
-      help_(regularFont, "Type a name (24 characters max)  |  Enter confirms  |  Escape cancels", 14),
-      confirmButton_(semiboldFont, "Create", {210.f, 54.f}),
-      cancelButton_(semiboldFont, "Cancel", {180.f, 54.f})
+ProfileEditOverlay::ProfileEditOverlay(AppContext& context)
+    : context_(context), backdrop_(Theme::logicalSize), panel_({650.f, 360.f}), field_({554.f, 64.f}),
+      title_(context.semiboldFont, "Create profile", 32),
+      prompt_(context.semiboldFont, "DISPLAY NAME", Theme::labelSize),
+      valueText_(context.regularFont, "", 22), errorText_(context.regularFont, "", 16),
+      help_(context.regularFont, "Type a name (24 characters max)  |  Enter confirms  |  Escape cancels", 14),
+      confirmButton_(context.semiboldFont, "Create", {210.f, 54.f}),
+      cancelButton_(context.semiboldFont, "Cancel", {180.f, 54.f})
 {
     backdrop_.setFillColor(Theme::overlay);
     panel_.setPosition({315.f, 180.f}); panel_.setFillColor(Theme::backgroundRaised);
@@ -44,27 +44,33 @@ void ProfileEditOverlay::open(Mode mode, std::string initialValue)
     error_.clear();
     selectedButton_ = 0;
     open_ = true;
+    confirmButton_.setHovered(false);
+    cancelButton_.setHovered(false);
     refresh();
 }
 
 void ProfileEditOverlay::setError(std::string error)
 {
     error_ = std::move(error);
+    context_.play(audio::SoundId::UiError);
     refresh();
 }
 
 ProfileEditOverlay::Result ProfileEditOverlay::handleEvent(const sf::Event& event, sf::RenderWindow& window)
 {
     if (!open_) return Result::None;
-    if (const auto* text = event.getIf<sf::Event::TextEntered>()) {
+    if (const auto* text = event.getIf<sf::Event::TextEntered>(); text && text->unicode >= 32) {
         if (utf8_text::appendPrintable(value_, text->unicode, 24)) {
             error_.clear();
             refresh();
+        } else {
+            context_.play(audio::SoundId::UiError);
         }
     }
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
         if (key->code == sf::Keyboard::Key::Escape) {
             open_ = false;
+            context_.play(audio::SoundId::UiBack);
             return Result::Cancel;
         }
         if (key->code == sf::Keyboard::Key::Backspace && !value_.empty()) {
@@ -72,9 +78,11 @@ ProfileEditOverlay::Result ProfileEditOverlay::handleEvent(const sf::Event& even
         } else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Left ||
                    key->code == sf::Keyboard::Key::Right) {
             selectedButton_ = 1 - selectedButton_; refresh();
+            context_.play(audio::SoundId::UiFocus);
         } else if (key->code == sf::Keyboard::Key::Enter) {
             if (selectedButton_ == 0) return Result::Confirm;
             open_ = false;
+            context_.play(audio::SoundId::UiBack);
             return Result::Cancel;
         }
     }
@@ -82,22 +90,27 @@ ProfileEditOverlay::Result ProfileEditOverlay::handleEvent(const sf::Event& even
         const auto point = window.mapPixelToCoords(moved->position);
         confirmButton_.setHovered(confirmButton_.contains(point));
         cancelButton_.setHovered(cancelButton_.contains(point));
+        const auto previous = selectedButton_;
         if (confirmButton_.contains(point)) selectedButton_ = 0;
         if (cancelButton_.contains(point)) selectedButton_ = 1;
+        if (previous != selectedButton_) context_.play(audio::SoundId::UiFocus);
         refresh();
     }
     if (const auto* click = event.getIf<sf::Event::MouseButtonReleased>();
         click && click->button == sf::Mouse::Button::Left) {
         const auto point = window.mapPixelToCoords(click->position);
         if (confirmButton_.contains(point)) return Result::Confirm;
-        if (cancelButton_.contains(point)) { open_ = false; return Result::Cancel; }
+        if (cancelButton_.contains(point)) { open_ = false; context_.play(audio::SoundId::UiBack); return Result::Cancel; }
     }
     return Result::None;
 }
 
 void ProfileEditOverlay::update(sf::Time deltaTime)
 {
-    if (open_) { confirmButton_.update(deltaTime); cancelButton_.update(deltaTime); }
+    if (open_) {
+        confirmButton_.update(deltaTime, context_.reducedMotion());
+        cancelButton_.update(deltaTime, context_.reducedMotion());
+    }
 }
 
 void ProfileEditOverlay::render(sf::RenderWindow& window) const

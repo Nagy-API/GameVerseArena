@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppContext.hpp"
 #include "UiButton.hpp"
 
 #include <SFML/Graphics/RectangleShape.hpp>
@@ -14,7 +15,7 @@ class ProfileDeleteOverlay {
 public:
     enum class Result { None, Confirm, Cancel };
 
-    ProfileDeleteOverlay(const sf::Font& regularFont, const sf::Font& semiboldFont);
+    explicit ProfileDeleteOverlay(AppContext& context);
     void open(std::string profileName, bool activeProfile);
     bool isOpen() const noexcept { return open_; }
     void close() noexcept { open_ = false; }
@@ -25,6 +26,7 @@ public:
 private:
     void refresh();
 
+    AppContext& context_;
     sf::RectangleShape backdrop_;
     sf::RectangleShape panel_;
     sf::Text title_;

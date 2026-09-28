@@ -1,3 +1,5 @@
+#include "Schema.hpp"
+#include "TestSchemaSupport.hpp"
 #include "AchievementCatalogue.hpp"
 #include "AchievementEvaluator.hpp"
 #include "AchievementNotificationQueue.hpp"
@@ -214,12 +216,12 @@ void testMigrationAndRepository(const std::filesystem::path& directory)
         persistence::MatchService matches(database);
         matches.recordCompleted(match(profile.id, persistence::GameKey::ClassicTicTacToe,
                                       persistence::MatchResult::Win, 100));
-        database.execute("DROP TABLE IF EXISTS achievement_unlocks;");
-        database.execute("PRAGMA user_version = 2;");
+        test_support::downgradeToVersion(database, 2);
     }
     {
         persistence::Database migrated(path);
-        check(migrated.userVersion() == 3, "v2 database migrates transactionally to v3");
+        check(migrated.userVersion() == persistence::schema::currentVersion,
+              "v2 database migrates transactionally through v3 to the current schema");
         persistence::ProfileService profiles(migrated);
         check(profiles.activeProfile().has_value() && profiles.activeProfile()->id == profileId,
               "active profile survives v2-to-v3 migration");
@@ -240,20 +242,21 @@ void testMigrationAndRepository(const std::filesystem::path& directory)
     }
     {
         persistence::Database reopened(path);
-        check(reopened.userVersion() == 3, "repeated v3 open is idempotent");
+        check(reopened.userVersion() == persistence::schema::currentVersion, "repeated current-schema open is idempotent");
     }
 
     const auto futurePath = directory / "future-v4.db";
     {
         persistence::Database database(futurePath);
-        database.execute("PRAGMA user_version = 4;");
+        database.execute(("PRAGMA user_version = " + std::to_string(persistence::schema::currentVersion + 1) + ";").c_str());
     }
     try {
         persistence::Database unsupported(futurePath);
-        check(false, "unsupported future v4 must fail safely");
+        check(false, "unsupported future schema must fail safely");
     } catch (const std::runtime_error& error) {
-        check(std::string(error.what()).find("version 4") != std::string::npos,
-              "future-version rejection identifies v4");
+        check(std::string(error.what()).find("version " + std::to_string(persistence::schema::currentVersion + 1)) !=
+                  std::string::npos,
+              "future-version rejection identifies the unsupported version");
     }
 
     persistence::Database database(directory / "repository.db");
@@ -436,6 +439,28 @@ void testNotificationQueue()
 
     queue.enqueue({definition("first_victory"), definition("first_victory")});
     check(queue.pendingCount() == 1, "queue suppresses duplicate pending toast keys");
+
+    // The display sequence advances once per notification that becomes visible, which is
+    // what lets the toast play its unlock sound exactly once per achievement.
+    achievements::AchievementNotificationQueue sequenced(3.5f);
+    check(sequenced.sequence() == 0 && !sequenced.current(), "empty queue has no display sequence");
+    sequenced.enqueue({definition("first_victory"), definition("on_a_roll")});
+    const auto firstSequence = sequenced.sequence();
+    check(firstSequence == 1, "first visible notification starts display sequence 1");
+    sequenced.update(1.0f);
+    sequenced.enqueue({definition("unstoppable")});
+    check(sequenced.sequence() == firstSequence, "updating or queueing behind a visible toast keeps its sequence");
+    sequenced.dismiss();
+    check(sequenced.sequence() == firstSequence + 1 && sequenced.current()->key == "on_a_roll",
+          "advancing to the next notification increments the sequence once");
+    sequenced.update(3.5f);
+    check(sequenced.sequence() == firstSequence + 2 && sequenced.current()->key == "unstoppable",
+          "timed advance increments the sequence once");
+    sequenced.dismiss();
+    check(!sequenced.current() && sequenced.sequence() == firstSequence + 2,
+          "emptying the queue does not start a new sequence");
+    sequenced.enqueue({definition("first_victory")});
+    check(sequenced.sequence() == firstSequence + 3, "a later unlock starts a fresh sequence");
 
     const auto wrapped = wrapAchievementToastDescription(definition("versatile_player").description, 42);
     check(wrapped.find('\n') != std::string::npos,

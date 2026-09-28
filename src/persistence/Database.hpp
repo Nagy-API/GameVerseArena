@@ -63,6 +63,7 @@ public:
     bool foreignKeysEnabled() const;
     const std::filesystem::path& path() const noexcept { return path_; }
     std::int64_t lastInsertId() const;
+    void requireNoForeignKeyViolations(const char* table, const std::string& context);
 
 private:
     friend class Transaction;

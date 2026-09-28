@@ -6,30 +6,34 @@
 #include <SFML/Window/Mouse.hpp>
 
 #include <algorithm>
+#include <exception>
+#include <iostream>
 #include <string>
 
-ProfilesScene::ProfilesScene(const sf::Font& regularFont, const sf::Font& semiboldFont,
-                             SceneManager& sceneManager, persistence::ProfileService& profileService,
+ProfilesScene::ProfilesScene(AppContext& context, persistence::ProfileService& profileService,
                              std::int64_t& selectedStatsProfileId)
-    : sceneManager_(sceneManager), profileService_(profileService), selectedStatsProfileId_(selectedStatsProfileId), regularFont_(regularFont),
-      kicker_(semiboldFont, "LOCAL PLAYERS", Theme::labelSize),
-      title_(semiboldFont, "Player Profiles", Theme::pageTitleSize),
-      subtitle_(regularFont, "Choose the local name used as Player 1's default in graphical games.", Theme::bodySize),
-      help_(regularFont, "Up / Down selects a profile  |  Tab or Left / Right selects an action  |  Enter activates", 14),
-      scrollStatus_(regularFont, "", 14),
-      actions_{UiButton(semiboldFont, "Create Profile", {318.f, 56.f}),
-               UiButton(semiboldFont, "Rename", {318.f, 56.f}),
-               UiButton(semiboldFont, "Delete", {318.f, 56.f}),
-               UiButton(semiboldFont, "Set Active", {318.f, 56.f}),
-               UiButton(semiboldFont, "View Stats", {318.f, 56.f}),
-               UiButton(semiboldFont, "Back", {318.f, 56.f})},
-      editOverlay_(regularFont, semiboldFont), deleteOverlay_(regularFont, semiboldFont)
+    : context_(context), profileService_(profileService), selectedStatsProfileId_(selectedStatsProfileId),
+      regularFont_(context.regularFont),
+      kicker_(context.semiboldFont, "LOCAL PLAYERS", Theme::labelSize),
+      title_(context.semiboldFont, "Player Profiles", Theme::pageTitleSize),
+      subtitle_(context.regularFont, "Choose the local name used as Player 1's default in graphical games.", Theme::bodySize),
+      help_(context.regularFont, "Up / Down selects a profile  |  Tab or Left / Right selects an action  |  Enter activates", 14),
+      scrollStatus_(context.regularFont, "", 14),
+      actionError_(context.regularFont, "", 14),
+      actions_{UiButton(context.semiboldFont, "Create Profile", {318.f, 56.f}),
+               UiButton(context.semiboldFont, "Rename", {318.f, 56.f}),
+               UiButton(context.semiboldFont, "Delete", {318.f, 56.f}),
+               UiButton(context.semiboldFont, "Set Active", {318.f, 56.f}),
+               UiButton(context.semiboldFont, "View Stats", {318.f, 56.f}),
+               UiButton(context.semiboldFont, "Back", {318.f, 56.f})},
+      editOverlay_(context), deleteOverlay_(context)
 {
     kicker_.setPosition({Theme::pageMargin, 42.f}); kicker_.setFillColor(Theme::secondary);
     title_.setPosition({Theme::pageMargin, 70.f}); title_.setFillColor(Theme::textPrimary);
     subtitle_.setPosition({Theme::pageMargin, 125.f}); subtitle_.setFillColor(Theme::textSecondary);
     help_.setPosition({Theme::pageMargin, 680.f}); help_.setFillColor(Theme::textMuted);
     scrollStatus_.setPosition({72.f, 642.f}); scrollStatus_.setFillColor(Theme::textMuted);
+    actionError_.setPosition({300.f, 642.f}); actionError_.setFillColor(Theme::danger);
 
     names_.reserve(visibleCount); badges_.reserve(visibleCount);
     for (std::size_t index = 0; index < visibleCount; ++index) {
@@ -38,7 +42,7 @@ ProfilesScene::ProfilesScene(const sf::Font& regularFont, const sf::Font& semibo
         cards_[index].setFillColor(Theme::backgroundRaised); cards_[index].setOutlineThickness(1.f);
         names_.emplace_back(regularFont_, "", 21); names_.back().setPosition({96.f, y + 18.f});
         names_.back().setFillColor(Theme::textPrimary);
-        badges_.emplace_back(semiboldFont, "", Theme::labelSize); badges_.back().setPosition({680.f, y + 21.f});
+        badges_.emplace_back(context.semiboldFont, "", Theme::labelSize); badges_.back().setPosition({680.f, y + 21.f});
         badges_.back().setFillColor(Theme::secondary);
     }
     for (std::size_t index = 0; index < actionCount; ++index) {
@@ -57,6 +61,7 @@ void ProfilesScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
                 if (pendingProfileId_ == 0) changed = profileService_.createProfile(editOverlay_.value());
                 else changed = profileService_.renameProfile(pendingProfileId_, editOverlay_.value());
                 editOverlay_.close();
+                context_.play(audio::SoundId::UiConfirm);
                 reload(changed.id);
             } catch (const persistence::ProfileError& error) {
                 editOverlay_.setError(error.what());
@@ -67,7 +72,15 @@ void ProfilesScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
     if (deleteOverlay_.isOpen()) {
         const auto result = deleteOverlay_.handleEvent(event, window);
         if (result == ProfileDeleteOverlay::Result::Confirm) {
-            profileService_.deleteProfile(pendingProfileId_);
+            try {
+                profileService_.deleteProfile(pendingProfileId_);
+                actionError_.setString("");
+                context_.play(audio::SoundId::UiConfirm);
+            } catch (const std::exception& error) {
+                std::cerr << "GameVerseArenaGUI: profile delete failed: " << error.what() << '\n';
+                actionError_.setString("The profile could not be deleted; details were logged.");
+                context_.play(audio::SoundId::UiError);
+            }
             deleteOverlay_.close();
             reload();
         }
@@ -75,10 +88,11 @@ void ProfilesScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
     }
 
     if (const auto* key = event.getIf<sf::Event::KeyPressed>()) {
-        if (key->code == sf::Keyboard::Key::Escape) sceneManager_.switchTo(SceneId::MainMenu);
+        if (key->code == sf::Keyboard::Key::Escape) { activateAction(5); return; }
         else if (key->code == sf::Keyboard::Key::Up) moveProfileSelection(-1);
         else if (key->code == sf::Keyboard::Key::Down) moveProfileSelection(1);
-        else if (key->code == sf::Keyboard::Key::Tab || key->code == sf::Keyboard::Key::Right) moveActionSelection(1);
+        else if (key->code == sf::Keyboard::Key::Tab) moveActionSelection(key->shift ? -1 : 1);
+        else if (key->code == sf::Keyboard::Key::Right) moveActionSelection(1);
         else if (key->code == sf::Keyboard::Key::Left) moveActionSelection(-1);
         else if (key->code == sf::Keyboard::Key::Enter || key->code == sf::Keyboard::Key::Space) activateAction(selectedAction_);
     }
@@ -89,13 +103,13 @@ void ProfilesScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
         const auto point = window.mapPixelToCoords(moved->position);
         for (std::size_t slot = 0; slot < visibleCount; ++slot) {
             if (firstVisible_ + slot < profiles_.size() && cards_[slot].getGlobalBounds().contains(point)) {
-                selectedProfileIndex_ = firstVisible_ + slot;
+                selectProfile(firstVisible_ + slot, true);
             }
         }
         for (std::size_t action = 0; action < actionCount; ++action) {
             const bool hovered = actions_[action].contains(point);
             actions_[action].setHovered(hovered);
-            if (hovered) selectedAction_ = action;
+            if (hovered) selectAction(action, true);
         }
         refresh();
     }
@@ -104,7 +118,7 @@ void ProfilesScene::handleEvent(const sf::Event& event, sf::RenderWindow& window
         const auto point = window.mapPixelToCoords(click->position);
         for (std::size_t slot = 0; slot < visibleCount; ++slot) {
             if (firstVisible_ + slot < profiles_.size() && cards_[slot].getGlobalBounds().contains(point)) {
-                selectedProfileIndex_ = firstVisible_ + slot; refresh(); return;
+                selectProfile(firstVisible_ + slot, true); refresh(); return;
             }
         }
         for (std::size_t action = 0; action < actionCount; ++action) {
@@ -117,7 +131,7 @@ void ProfilesScene::update(sf::Time deltaTime)
 {
     if (editOverlay_.isOpen()) { editOverlay_.update(deltaTime); return; }
     if (deleteOverlay_.isOpen()) { deleteOverlay_.update(deltaTime); return; }
-    for (auto& action : actions_) action.update(deltaTime);
+    for (auto& action : actions_) action.update(deltaTime, context_.reducedMotion());
 }
 
 void ProfilesScene::render(sf::RenderWindow& window) const
@@ -127,7 +141,7 @@ void ProfilesScene::render(sf::RenderWindow& window) const
         window.draw(cards_[slot]); window.draw(names_[slot]); window.draw(badges_[slot]);
     }
     for (const auto& action : actions_) action.draw(window);
-    window.draw(scrollStatus_); window.draw(help_);
+    window.draw(scrollStatus_); window.draw(actionError_); window.draw(help_);
     editOverlay_.render(window); deleteOverlay_.render(window);
 }
 
@@ -136,7 +150,21 @@ void ProfilesScene::onResize(sf::Vector2u) {}
 void ProfilesScene::onActivate()
 {
     selectedAction_ = 3;
+    actionError_.setString("");
+    for (auto& action : actions_) action.setHovered(false);
     reload();
+}
+
+void ProfilesScene::selectAction(std::size_t action, bool withSound)
+{
+    if (withSound && action != selectedAction_) context_.play(audio::SoundId::UiFocus);
+    selectedAction_ = action;
+}
+
+void ProfilesScene::selectProfile(std::size_t index, bool withSound)
+{
+    if (withSound && index != selectedProfileIndex_) context_.play(audio::SoundId::UiFocus);
+    selectedProfileIndex_ = index;
 }
 
 void ProfilesScene::moveProfileSelection(int offset)
@@ -144,7 +172,7 @@ void ProfilesScene::moveProfileSelection(int offset)
     if (profiles_.empty()) return;
     const int next = std::clamp(static_cast<int>(selectedProfileIndex_) + offset, 0,
                                 static_cast<int>(profiles_.size()) - 1);
-    selectedProfileIndex_ = static_cast<std::size_t>(next);
+    selectProfile(static_cast<std::size_t>(next), true);
     if (selectedProfileIndex_ < firstVisible_) firstVisible_ = selectedProfileIndex_;
     if (selectedProfileIndex_ >= firstVisible_ + visibleCount) firstVisible_ = selectedProfileIndex_ - visibleCount + 1;
     refresh();
@@ -152,8 +180,8 @@ void ProfilesScene::moveProfileSelection(int offset)
 
 void ProfilesScene::moveActionSelection(int offset)
 {
-    selectedAction_ = static_cast<std::size_t>((static_cast<int>(selectedAction_) + offset +
-                                                static_cast<int>(actionCount)) % static_cast<int>(actionCount));
+    selectAction(static_cast<std::size_t>((static_cast<int>(selectedAction_) + offset +
+                                           static_cast<int>(actionCount)) % static_cast<int>(actionCount)), true);
     refresh();
 }
 
@@ -162,17 +190,33 @@ void ProfilesScene::activateAction(std::size_t action)
     const auto selected = selectedProfile();
     if (action == 0) {
         pendingProfileId_ = 0; editOverlay_.open(ProfileEditOverlay::Mode::Create);
+        context_.play(audio::SoundId::UiConfirm);
     } else if (action == 1 && selected.has_value()) {
         pendingProfileId_ = selected->id; editOverlay_.open(ProfileEditOverlay::Mode::Rename, selected->displayName);
+        context_.play(audio::SoundId::UiConfirm);
     } else if (action == 2 && selected.has_value()) {
         pendingProfileId_ = selected->id; deleteOverlay_.open(selected->displayName, selectedIsActive());
+        context_.play(audio::SoundId::UiConfirm);
     } else if (action == 3 && selected.has_value()) {
-        profileService_.setActiveProfile(selected->id); reload(selected->id);
+        try {
+            profileService_.setActiveProfile(selected->id);
+            actionError_.setString("");
+            context_.play(audio::SoundId::UiConfirm);
+        } catch (const std::exception& error) {
+            std::cerr << "GameVerseArenaGUI: set active profile failed: " << error.what() << '\n';
+            actionError_.setString("The active profile could not be changed; details were logged.");
+            context_.play(audio::SoundId::UiError);
+        }
+        reload(selected->id);
     } else if (action == 4 && selected.has_value()) {
         selectedStatsProfileId_ = selected->id;
-        sceneManager_.switchTo(SceneId::ProfileStats);
+        context_.play(audio::SoundId::UiConfirm);
+        context_.scenes.switchTo(SceneId::ProfileStats);
     } else if (action == 5) {
-        sceneManager_.switchTo(SceneId::MainMenu);
+        context_.play(audio::SoundId::UiBack);
+        context_.scenes.switchTo(SceneId::MainMenu);
+    } else {
+        context_.play(audio::SoundId::UiError);
     }
 }
 
