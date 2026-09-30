@@ -188,7 +188,19 @@ bool Application::initialize()
         context, *profileService_, *achievementService_, selectedStatsProfileId_));
     scenes_.add(SceneId::MatchHistory, std::make_unique<MatchHistoryScene>(
         context, *profileService_, *matchRepository_, selectedStatsProfileId_));
-    scenes_.add(SceneId::GameLibrary, std::make_unique<GameLibraryScene>(context));
+    launcher_ = std::make_unique<GameLauncher>(scenes_);
+    launcher_->bindDedicatedScene("classic_tic_tac_toe", SceneId::TicTacToeSetup);
+    launcher_->bindDedicatedScene("ping_pong", SceneId::PingPongSetup);
+    // The catalogue's "playable" flag and the launcher must agree for every game, or the library
+    // would advertise a game it cannot start (or hide one it can).
+    for (const auto& game : catalogue::all()) {
+        if (game.playableInGui() != launcher_->canLaunch(game)) {
+            reportFatal("Internal error", "The game library entry '" + game.key +
+                                              "' does not match the available game scenes.");
+            return false;
+        }
+    }
+    scenes_.add(SceneId::GameLibrary, std::make_unique<GameLibraryScene>(context, *launcher_));
     scenes_.add(SceneId::TicTacToeSetup, std::make_unique<TicTacToeSetupScene>(
         context, ticTacToeSession_, *profileService_, *ticTacToeRecorder_));
     scenes_.add(SceneId::TicTacToeGame, std::make_unique<TicTacToeGameScene>(
@@ -198,11 +210,14 @@ bool Application::initialize()
     scenes_.add(SceneId::PingPongGame, std::make_unique<PingPongGameScene>(
         context, pingPongSession_, *pingPongRecorder_, *achievementService_, achievementNotifications_));
     scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(context));
-    scenes_.add(SceneId::About, std::make_unique<AboutScene>(
-        context,
-        "Classic Tic-Tac-Toe and Ping Pong demonstrate two distinct graphical game loops.\n"
-        "All 14 original board games remain fully available in the separate console application;\n"
-        "the other 13 board games are still awaiting graphical migration."));
+    const auto playable = catalogue::playableCount();
+    const auto total = catalogue::all().size();
+    std::string aboutText = std::to_string(playable) + " of the " + std::to_string(total) +
+                            " games in the library are playable here, including real-time Ping Pong.\n"
+                            "All 14 original board games remain available in the separate console application";
+    aboutText += playable == total ? ".\n" : ";\nthe remaining board games are still awaiting graphical migration.\n";
+    aboutText += "Profiles, match history, statistics, achievements, and settings are stored only on this computer.";
+    scenes_.add(SceneId::About, std::make_unique<AboutScene>(context, aboutText));
     scenes_.switchTo(SceneId::MainMenu);
     return true;
 }

@@ -159,9 +159,30 @@ target_include_directories(GameVerseArenaPingPong PUBLIC
 target_compile_features(GameVerseArenaPingPong PUBLIC cxx_std_17)
 gva_strict_warnings(GameVerseArenaPingPong)
 
+# The graphical game catalogue (registry metadata and board-game factories).
+add_library(GameVerseArenaCatalogue
+    "src/catalogue/GameCatalogue.cpp"
+)
+target_include_directories(GameVerseArenaCatalogue PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/catalogue"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/common"
+)
+target_compile_features(GameVerseArenaCatalogue PUBLIC cxx_std_17)
+gva_strict_warnings(GameVerseArenaCatalogue)
+
 # ---------------------------------------------------------------------------
 # Tests (no window, no audio device, temporary databases only)
 # ---------------------------------------------------------------------------
+add_executable(GameVerseArenaCatalogueTests
+    "tests/GameCatalogueTests.cpp"
+)
+target_link_libraries(GameVerseArenaCatalogueTests PRIVATE GameVerseArenaCatalogue GameVerseArenaPersistence)
+target_compile_definitions(GameVerseArenaCatalogueTests PRIVATE
+    GVA_CONSOLE_MENU_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/XO_Demo.cpp")
+target_compile_features(GameVerseArenaCatalogueTests PRIVATE cxx_std_17)
+gva_strict_warnings(GameVerseArenaCatalogueTests)
+add_test(NAME GameCatalogueTests COMMAND GameVerseArenaCatalogueTests)
+
 add_executable(GameVerseArenaTests
     "tests/TicTacToeTests.cpp"
 )
@@ -268,6 +289,7 @@ add_executable(GameVerseArenaGUI
     "src/gui/SmokeTestDriver.cpp"
     "src/gui/MainMenuScene.cpp"
     "src/gui/GameLibraryScene.cpp"
+    "src/gui/GameLauncher.cpp"
     "src/gui/SettingsScene.cpp"
     "src/gui/AboutScene.cpp"
     "src/gui/UiButton.cpp"
@@ -309,6 +331,7 @@ target_link_libraries(GameVerseArenaGUI PRIVATE
     GameVerseArenaPingPong
     GameVerseArenaPersistence
     GameVerseArenaAudio
+    GameVerseArenaCatalogue
     SFML::Graphics
     SFML::Audio
 )

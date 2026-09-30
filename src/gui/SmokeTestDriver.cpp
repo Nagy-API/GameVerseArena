@@ -2,6 +2,7 @@
 
 #include "Application.hpp"
 #include "AudioEngine.hpp"
+#include "GameLibraryScene.hpp"
 #include "PingPongGameScene.hpp"
 
 #include <SFML/Window/Event.hpp>
@@ -47,6 +48,7 @@ int SmokeTestDriver::run()
     scenarioSettings();
     scenarioAbout();
     scenarioProfiles();
+    scenarioLibrary();
     scenarioTicTacToe();
     scenarioPingPong();
 
@@ -90,6 +92,21 @@ void SmokeTestDriver::key(sf::Keyboard::Key code, bool shift)
     sf::Event::KeyReleased released{};
     released.code = code;
     released.shift = shift;
+    app_.dispatch(sf::Event(released));
+    frames(1);
+}
+
+void SmokeTestDriver::keyWithText(sf::Keyboard::Key code, char32_t character)
+{
+    // Real typing delivers KeyPressed, then TextEntered, then KeyReleased.
+    sf::Event::KeyPressed pressed{};
+    pressed.code = code;
+    app_.dispatch(sf::Event(pressed));
+    sf::Event::TextEntered entered{};
+    entered.unicode = character;
+    app_.dispatch(sf::Event(entered));
+    sf::Event::KeyReleased released{};
+    released.code = code;
     app_.dispatch(sf::Event(released));
     frames(1);
 }
@@ -196,6 +213,27 @@ std::int64_t SmokeTestDriver::historyCount()
     return active ? app_.matchRepository_->count(active->id, {}) : -1;
 }
 
+void SmokeTestDriver::openLibrary()
+{
+    if (activeScene() != SceneId::GameLibrary) {
+        goToMainMenu();
+        click(mainMenuButton(0));
+    }
+    // The library keeps its search and scroll position between visits; start from the top.
+    if (auto* library = dynamic_cast<GameLibraryScene*>(&app_.scenes_.active())) {
+        if (!library->query().empty()) key(sf::Keyboard::Key::Escape);
+        if (library->focusZone() == GameLibraryScene::Zone::Grid) key(sf::Keyboard::Key::Home);
+    }
+}
+
+void SmokeTestDriver::clickLibraryCard(std::size_t visibleIndex)
+{
+    // Cards are laid out three per row from (72, 196) with 384 x 142 steps; 368 x 128 each.
+    const float x = 72.f + static_cast<float>(visibleIndex % 3) * 384.f + 184.f;
+    const float y = 196.f + static_cast<float>(visibleIndex / 3) * 142.f + 64.f;
+    click({x, y});
+}
+
 void SmokeTestDriver::goToMainMenu()
 {
     for (int attempt = 0; attempt < 6 && activeScene() != SceneId::MainMenu; ++attempt) {
@@ -296,13 +334,107 @@ void SmokeTestDriver::scenarioProfiles()
     expectScene(SceneId::MainMenu, "Escape leaves Profiles");
 }
 
+void SmokeTestDriver::scenarioLibrary()
+{
+    log_ << "\n[Game library]\n";
+    click(mainMenuButton(0));
+    if (!expectScene(SceneId::GameLibrary, "Play opens the game library")) return;
+    auto* library = dynamic_cast<GameLibraryScene*>(&app_.scenes_.active());
+    if (!expect(library != nullptr, "the active scene is the game library")) return;
+    expect(library->resultCount() == 15, "the library lists all 15 games");
+    captureBoth("library");
+
+    type("xo");
+    expect(library->query() == "xo" && library->resultCount() == 3, "typing searches by name (3 XO games)");
+    captureBoth("library_search");
+    key(sf::Keyboard::Key::Escape);
+    expect(library->query().empty() && library->resultCount() == 15, "Escape clears the search first");
+    expectScene(SceneId::GameLibrary, "clearing the search stays in the library");
+
+    click({772.f + 70.f, 128.f + 24.f});
+    expect(library->resultCount() == 1, "the Arcade filter shows only Ping Pong");
+    click({632.f + 65.f, 128.f + 24.f});
+    expect(library->resultCount() == 14, "the Board filter shows the 14 board games");
+    click({512.f + 55.f, 128.f + 24.f});
+    expect(library->resultCount() == 15, "the All filter shows every game");
+
+    sf::Event::MouseWheelScrolled wheel{};
+    wheel.delta = -1.f;
+    wheel.position = app_.window_.mapCoordsToPixel({640.f, 400.f});
+    app_.dispatch(sf::Event(wheel));
+    app_.dispatch(sf::Event(wheel));
+    app_.dispatch(sf::Event(wheel));
+    frames(2);
+    expect(library->firstVisibleRow() == 2, "the grid scrolls and stops at its last row");
+    captureBoth("library_scrolled");
+    wheel.delta = 1.f;
+    app_.dispatch(sf::Event(wheel));
+    app_.dispatch(sf::Event(wheel));
+    frames(2);
+    expect(library->firstVisibleRow() == 0, "the grid scrolls back to the top");
+
+    // A board game that is not migrated yet must not start a scene and must explain why.
+    type("sus");
+    key(sf::Keyboard::Key::Enter);
+    key(sf::Keyboard::Key::Enter);
+    expectScene(SceneId::GameLibrary, "a console-only game does not open a scene");
+    expect(library->hasMessage(), "choosing a console-only game explains that it is console-only for now");
+    captureBoth("library_console_only");
+    key(sf::Keyboard::Key::Escape);
+
+    using Key = sf::Keyboard::Key;
+    using Zone = GameLibraryScene::Zone;
+    keyWithText(Key::T, U't');
+    keyWithText(Key::I, U'i');
+    keyWithText(Key::C, U'c');
+    keyWithText(Key::Space, U' ');
+    expect(library->query() == "tic " && activeScene() == SceneId::GameLibrary,
+           "Space typed in the search box adds a space instead of launching a game");
+    for (int count = 0; count < 4; ++count) key(Key::Backspace);
+    expect(library->query().empty() && library->resultCount() == 15, "Backspace edits the search");
+
+    expect(library->focusZone() == Zone::Search, "typing focuses the search box");
+    key(Key::Tab);
+    expect(library->focusZone() == Zone::Categories, "Tab moves from search to the filters");
+    key(Key::Tab);
+    expect(library->focusZone() == Zone::Grid, "Tab moves from the filters to the games");
+    key(Key::Tab);
+    expect(library->focusZone() == Zone::Back, "Tab moves from the games to Back");
+    key(Key::Tab);
+    expect(library->focusZone() == Zone::Search, "Tab wraps from Back to search");
+    key(Key::Tab, true);
+    expect(library->focusZone() == Zone::Back, "Shift+Tab moves backwards");
+    key(Key::Tab, true);
+    expect(library->focusZone() == Zone::Grid, "Shift+Tab reaches the games again");
+
+    key(Key::Home);
+    expect(library->selectedIndex() == 0 && library->firstVisibleRow() == 0, "Home focuses the first game");
+    key(Key::PageDown);
+    key(Key::PageDown);
+    expect(library->selectedIndex() == 14 && library->firstVisibleRow() == 2,
+           "repeated Page Down reaches the last game and scrolls to the last row");
+    key(Key::PageUp);
+    expect(library->selectedIndex() == 5 && library->firstVisibleRow() == 1, "Page Up moves the focus back a screen");
+    key(Key::End);
+    expect(library->selectedIndex() == 14 && library->firstVisibleRow() == 2, "End focuses the last game");
+
+    clickLibraryCard(8);  // bottom-right visible card while scrolled two rows: Ping Pong
+    expectScene(SceneId::PingPongSetup, "clicking a card in a scrolled grid opens the right game");
+    key(Key::Escape);
+    expectScene(SceneId::GameLibrary, "Escape in a setup returns to the library");
+
+    // Keyboard zones: Tab from the grid reaches Back; Enter there returns to the main menu.
+    key(sf::Keyboard::Key::Tab);
+    key(sf::Keyboard::Key::Enter);
+    expectScene(SceneId::MainMenu, "Tab reaches Back and Enter leaves the library");
+}
+
 void SmokeTestDriver::scenarioTicTacToe()
 {
     log_ << "\n[Classic Tic-Tac-Toe]\n";
-    click(mainMenuButton(0));
+    openLibrary();
     if (!expectScene(SceneId::GameLibrary, "Play opens the game library")) return;
-    captureBoth("library");
-    click({72.f + 265.f, 190.f + 59.f});
+    clickLibraryCard(0);
     if (!expectScene(SceneId::TicTacToeSetup, "Classic Tic-Tac-Toe opens its setup")) return;
     click({72.f + 274.f, 190.f + 41.f});  // Game mode row -> Human vs Computer
     captureBoth("tictactoe_setup");
@@ -338,11 +470,9 @@ void SmokeTestDriver::scenarioTicTacToe()
 void SmokeTestDriver::scenarioPingPong()
 {
     log_ << "\n[Ping Pong]\n";
-    if (activeScene() != SceneId::GameLibrary) {
-        goToMainMenu();
-        click(mainMenuButton(0));
-    }
-    click({678.f + 265.f, 190.f + 59.f});
+    openLibrary();
+    type("ping");
+    clickLibraryCard(0);
     if (!expectScene(SceneId::PingPongSetup, "Ping Pong opens its setup")) return;
     click({72.f + 310.f, 190.f + 36.f});  // Game mode row -> Human vs Computer
     const auto historyBefore = historyCount();

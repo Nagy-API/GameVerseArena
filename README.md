@@ -55,6 +55,7 @@ cmake --build build --config Release --target GameVerseArenaSettingsTests
 cmake --build build --config Release --target GameVerseArenaSchemaSafetyTests
 cmake --build build --config Release --target GameVerseArenaAudioTests
 cmake --build build --config Release --target GameVerseArenaAudioEngineTests
+cmake --build build --config Release --target GameVerseArenaCatalogueTests
 ctest --test-dir build --output-on-failure
 ```
 
@@ -190,6 +191,17 @@ Reduced Motion turns off decorative motion: button hover/focus easing, the achie
 - Resize the window normally; the 16:9 interface view scales while preserving the layout. The practical design size is 960 x 540 or larger, with a default window size of 1280 x 720 and a 60 FPS frame limit.
 - In Achievements, Tab/Left/Right selects category or Back controls; Up/Down, Page Up/Page Down, or the mouse wheel scrolls the bounded list.
 
+## Game library
+
+Choose **Play** to open the game library. It lists every game in one searchable, scrollable grid: the 14 original board games in console-menu order, then Ping Pong. Each card shows the game's name, category (BOARD or ARCADE), a one-line description, its board, the player modes, and whether it is **PLAYABLE** in the graphical app or, for board games whose graphical version is not available yet, **CONSOLE ONLY**. Choosing a console-only game explains that it is playable in the console application instead of opening an empty screen.
+
+- Type anywhere to search by name; Backspace edits, and Escape clears the search before leaving the library.
+- **All**, **Board**, and **Arcade** filter the grid; with the filters focused, Left/Right switches between them.
+- Tab and Shift+Tab move between the search box, the filters, the game grid, and **Back**. In the grid, the arrow keys move the focus, Page Up/Page Down move it nine games (one screenful) at a time, Home/End jump to the first or last game, and Enter or Space opens the focused game.
+- With the mouse, hover a card to focus it (while you are typing a search, hovering only highlights it), click to open it, use the wheel to scroll, and click the search box, a filter, or **Back**.
+
+The library is driven by a single catalogue (`src/catalogue`) that also supplies each game's rules, player modes, truthful description of its computer opponent, tournament and history eligibility, and its identity in the console menu. `GameVerseArenaCatalogueTests` reads `XO_Demo.cpp` and checks that the catalogue describes exactly the 14 console games plus Ping Pong.
+
 ## Classic Tic-Tac-Toe in the GUI
 
 Choose **Play**, select **Classic Tic-Tac-Toe**, complete Player Setup, and start the match. The graphical version supports:
@@ -206,7 +218,7 @@ The active profile provides Player 1's initial setup name. Match-specific displa
 
 ## Ping Pong in the GUI
 
-Choose **Play**, select **Ping Pong** under Arcade Games, configure the match, and select **Start Match**. Every match is first to 5 points with no win-by-two rule.
+Choose **Play**, select **Ping Pong** (the last card, or use the **Arcade** filter or search), configure the match, and select **Start Match**. Every match is first to 5 points with no win-by-two rule.
 
 - Human vs Human: W/S controls the left paddle and Up/Down controls the right paddle.
 - Human vs Computer: the human controls the left paddle with either W/S or Up/Down.

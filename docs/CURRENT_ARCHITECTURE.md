@@ -15,7 +15,7 @@
 - `ProfileStatsScene`: read-only overall and per-game statistics for the selected profile, including the zero-history empty state, achievement summary, and navigation to history or achievements.
 - `ProfileAchievementsScene`: profile-scoped achievement cards, All/General/Tic-Tac-Toe/Ping Pong filters, bounded scrolling, first-unlock dates, and history-derived locked progress.
 - `MatchHistoryScene`: newest-first bounded pages with repository-level game/result filters and Previous/Next navigation.
-- `GameLibraryScene`: launches graphical Classic Tic-Tac-Toe and Ping Pong while truthfully identifying the other 13 board games as console-only.
+- `GameLibraryScene`: a searchable, filterable (All / Board / Arcade), bounded-scrolling three-column grid of every entry in the game catalogue, with keyboard focus zones (search, filters, grid, Back) and mouse hover, click, and wheel support. Games not yet available in the GUI are labelled CONSOLE APP ONLY and explain themselves instead of opening a scene.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
 - `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
 - `TicTacToeResultOverlay`: round and match results with next-round, restart, rematch, setup, and library actions.
@@ -25,6 +25,8 @@
 - `PingPongResultOverlay`: winner, final score, Rematch, New Setup, and Return to Library actions.
 - `SettingsScene`: interactive app-wide settings: Master, UI, Gameplay, and Achievement volume sliders (keyboard steps and mouse click/drag), Mute All and Reduced Motion toggles, Reset to Defaults, and Back. Every change is applied immediately through `SettingsController` and saved through `SettingsService`.
 - `AboutScene`: technology and current-milestone information.
+
+The game catalogue (`src/catalogue`, library `GameVerseArenaCatalogue`) is SFML-independent, immutable, project-owned metadata for all 15 graphical games: stable key (identical to the persistence game key), display name, one-line description, rules, board summary, category, player modes, a truthful description of the computer opponent, seat labels, tournament and history eligibility, launch kind (its own dedicated scenes, a board-game factory, or console-only while the game awaits graphical migration), the optional factory, and the game's console menu number, label, and legacy board class. `GameLauncher` binds catalogue entries to scenes, so the library contains no per-game code; at startup `Application` verifies that every entry the catalogue marks playable can actually be launched, so the library can never advertise a game it cannot start. `GameVerseArenaCatalogueTests` checks unique keys and names, agreement with the persistence keys, complete and consistent descriptors, search and filtering, and parses `XO_Demo.cpp` to prove the catalogue matches the console's 14 menu entries and their board classes.
 
 `UiButton` provides common bounds, label rendering, hover and selected states, click hit-testing, and delta-time-based visual transitions that snap to their final state when Reduced Motion is on. `Theme.hpp` centralizes the shell's colors, spacing, type sizes, and animation speed. `AssetManager` loads each required Inter font once, and CMake copies the assets beside the GUI executable.
 

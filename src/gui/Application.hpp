@@ -7,6 +7,7 @@
 #include "AssetManager.hpp"
 #include "AudioEngine.hpp"
 #include "Database.hpp"
+#include "GameLauncher.hpp"
 #include "MatchRecorder.hpp"
 #include "MatchRepository.hpp"
 #include "MatchService.hpp"
@@ -71,6 +72,7 @@ private:
     achievements::AchievementNotificationQueue achievementNotifications_;
     std::int64_t selectedStatsProfileId_{};
     std::unique_ptr<AppContext> context_;
+    std::unique_ptr<GameLauncher> launcher_;
     // Declared after everything the scenes reference so the scenes are destroyed first.
     SceneManager scenes_;
     std::unique_ptr<AchievementToast> achievementToast_;

@@ -25,6 +25,7 @@ public:
 
 private:
     void key(sf::Keyboard::Key key, bool shift = false);
+    void keyWithText(sf::Keyboard::Key key, char32_t character);
     void type(const std::string& text);
     void move(sf::Vector2f logical);
     void click(sf::Vector2f logical);
@@ -40,11 +41,14 @@ private:
     SceneId activeScene() const;
     std::int64_t historyCount();
     void goToMainMenu();
+    void openLibrary();
+    void clickLibraryCard(std::size_t visibleIndex);
 
     void scenarioMainMenu();
     void scenarioSettings();
     void scenarioAbout();
     void scenarioProfiles();
+    void scenarioLibrary();
     void scenarioTicTacToe();
     void scenarioPingPong();
 
