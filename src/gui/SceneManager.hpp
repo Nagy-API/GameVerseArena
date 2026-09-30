@@ -17,6 +17,8 @@ enum class SceneId : std::size_t {
     TicTacToeGame,
     PingPongSetup,
     PingPongGame,
+    BoardGameSetup,
+    BoardGame,
     Settings,
     About,
     Count

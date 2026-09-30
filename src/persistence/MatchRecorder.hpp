@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -55,6 +56,48 @@ public:
         difficulty_ = config.mode == ping_pong::GameMode::HumanVsComputer
             ? difficulty(config.difficulty) : DifficultyKey::None;
         format_ = "first_to_5";
+    }
+
+    // A shared board game (one game per match). The profile's player holds the first seat when
+    // `profileMovesFirst` (always Player 1 in human-vs-human play); the computer opponent of
+    // these games has one strategy, stored as the 'standard' difficulty.
+    void beginBoardGame(const Profile& profile, GameKey game, MatchMode mode, bool profileMovesFirst,
+                        std::string profileName, std::string opponentName)
+    {
+        const auto sides = boardGameSides(game);
+        if (!sides) throw std::invalid_argument("That game is not played in the shared board-game scenes");
+        reset(profile);
+        game_ = game;
+        mode_ = mode;
+        profileName_ = std::move(profileName);
+        opponentName_ = std::move(opponentName);
+        difficulty_ = mode == MatchMode::HumanVsComputer ? DifficultyKey::Standard : DifficultyKey::None;
+        format_ = "single";
+        profileSide_ = profileMovesFirst ? sides->first : sides->second;
+        opponentSide_ = profileMovesFirst ? sides->second : sides->first;
+        boardGameConfigured_ = true;
+    }
+
+    // Restart or rematch with the same players and sides: a fresh, unrecorded game.
+    void restartBoardGame()
+    {
+        if (!boardGameConfigured_) return;
+        Profile captured; captured.id = profileId_; captured.displayName = profileName_;
+        reset(captured);
+        boardGameConfigured_ = true;
+    }
+
+    // Records the finished game once. Points are passed only for games that score them.
+    bool completeBoardGame(MatchResult result, std::optional<int> profileScore, std::optional<int> opponentScore)
+    {
+        if (!boardGameConfigured_ || !active_ || finalized_) return false;
+        CompletedMatch match = base();
+        match.profileSideOrMark = profileSide_;
+        match.opponentSideOrMark = opponentSide_;
+        match.result = result;
+        match.profileScore = profileScore;
+        match.opponentScore = opponentScore;
+        return persistOnce(match);
     }
 
     void restartTicTacToe(const classic_ttt::SessionConfig& config)
@@ -116,7 +159,7 @@ public:
         running_ = true;
     }
 
-    void abandon() noexcept { active_ = false; running_ = false; finalized_ = true; }
+    void abandon() noexcept { active_ = false; running_ = false; finalized_ = true; boardGameConfigured_ = false; }
     bool finalized() const noexcept { return finalized_; }
     std::int64_t profileId() const noexcept { return profileId_; }
 
@@ -139,6 +182,7 @@ private:
 
     void reset(const Profile& profile)
     {
+        boardGameConfigured_ = false;
         profileId_ = profile.id;
         startedAt_ = utcNow_();
         accumulated_ = SteadyDuration::zero();
@@ -179,6 +223,9 @@ private:
     std::string profileName_;
     std::string opponentName_;
     std::string format_;
+    std::string profileSide_;
+    std::string opponentSide_;
+    bool boardGameConfigured_{};
     SteadyDuration accumulated_{};
     std::chrono::steady_clock::time_point runningSince_{};
     bool active_{};

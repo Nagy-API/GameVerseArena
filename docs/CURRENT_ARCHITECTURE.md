@@ -15,7 +15,7 @@
 - `ProfileStatsScene`: read-only overall and per-game statistics for the selected profile, including the zero-history empty state, achievement summary, and navigation to history or achievements.
 - `ProfileAchievementsScene`: profile-scoped achievement cards, All/General/Tic-Tac-Toe/Ping Pong filters, bounded scrolling, first-unlock dates, and history-derived locked progress.
 - `MatchHistoryScene`: newest-first bounded pages with repository-level game/result filters and Previous/Next navigation.
-- `GameLibraryScene`: a searchable, filterable (All / Board / Arcade), bounded-scrolling three-column grid of every entry in the game catalogue, with keyboard focus zones (search, filters, grid, Back) and mouse hover, click, and wheel support. Games not yet available in the GUI are labelled CONSOLE APP ONLY and explain themselves instead of opening a scene.
+- `GameLibraryScene`: a searchable, filterable (All / Board / Arcade), bounded-scrolling three-column grid of every entry in the game catalogue, with keyboard focus zones (search, filters, grid, Back) and mouse hover, click, and wheel support. Games not yet available in the GUI are labelled CONSOLE ONLY and explain themselves instead of opening a scene.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
 - `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
 - `TicTacToeResultOverlay`: round and match results with next-round, restart, rematch, setup, and library actions.
@@ -23,6 +23,8 @@
 - `PingPongGameScene`: held controls, fixed-timestep simulation, score and arena rendering, focus-loss safety, and scene navigation.
 - `PingPongPauseOverlay`: Resume, Restart Match, New Setup, and Return to Library actions while all real-time state is stopped.
 - `PingPongResultOverlay`: winner, final score, Rematch, New Setup, and Return to Library actions.
+- `BoardGameSetupScene`: the setup shared by every migrated board game: mode, editable names, and the human's side against the computer, next to the catalogue's rules and computer description.
+- `BoardGameScene`: the shared play scene: seat panels with points and turn badges, the game's board view, status and help lines, Restart/Rules/Back focus with Tab, background computer moves, sounds, exit confirmation, and one-time recording. `BoardGameResultOverlay` (Rematch, View Final Board, New Setup, Return to Library) and `BoardGameRulesOverlay` are its overlays.
 - `SettingsScene`: interactive app-wide settings: Master, UI, Gameplay, and Achievement volume sliders (keyboard steps and mouse click/drag), Mute All and Reduced Motion toggles, Reset to Defaults, and Back. Every change is applied immediately through `SettingsController` and saved through `SettingsService`.
 - `AboutScene`: technology and current-milestone information.
 
@@ -104,6 +106,22 @@ The GUI Tic-Tac-Toe lifecycle cancels its non-blocking AI timer before Restart R
 
 The Tic-Tac-Toe path remains event-driven and turn-based: discrete moves update a board/session model and AI chooses a discrete cell. Ping Pong instead consumes continuous control intentions and advances numeric state through fixed real-time steps. Neither graphical game depends on the console implementation, and Ping Pong is not forced into `Board<T>`, `Move<T>`, `Player<T>`, or `GameManager<T>`.
 
+## Graphical board games
+
+The original board games are rebuilt for the GUI behind one SFML-independent contract in `src/games/common`, compiled with the games into the `GameVerseArenaBoardGames` library:
+
+- `TurnBasedGame` exposes what generic code needs: the seat to move (`First` always moves first), the outcome (in progress, won by a seat, or drawn, with a short reason), legal moves as opaque non-negative `MoveId`s, `play`, `reset`, `clone`, optional per-seat points, and `chooseComputerMove(random, cancel)`, which must only read the game so it can run on a clone.
+- `BoardGameSession` owns one game between two named players: trimmed names with seat defaults, Human vs Human or Human vs Computer with the human's seat, whose turn belongs to the computer, restart, and `takeCompletedOutcome`, which reports each finished game exactly once.
+- `ComputerMoveTask` runs a computer search on a worker thread over a clone, delivers its result once through a future, and on cancel or destruction sets the shared cancel flag and joins the thread, so no search outlives the scene.
+
+Each game keeps its typed rules and computer strategy in its own folder (`src/games/numerical`, `sus`, `five_by_five`, `misere`). They are ports of the console modules' rules and strategies, not wrappers: the GUI never uses `Board<T>`, `Move<T>`, `Player<T>`, or `GameManager<T>`, and the console sources are unchanged. Long searches (Misere's full minimax) poll the cancel flag every 1,024 nodes. Each game has a CTest executable with rule, scoring, and computer-strategy cases plus `TurnBasedTestSupport`'s shared contract: seeded random and computer-versus-computer games stay legal and alternate turns (and, for games of bounded length, end), finished games refuse moves, reset restores the opening, clones are independent, play is deterministic per seed, and a cancelled search returns no move. `GameVerseArenaBoardGameSessionTests` covers the session and the background task, including cancellation, replacement, and error propagation.
+
+In the GUI, `BoardGameHost` holds the chosen catalogue entry, the session, and the game's `BoardView`. The library's board-game launcher stores the entry and opens `BoardGameSetupScene`; Start creates the game through the catalogue factory, creates its view through `board_view::createBoardView`, and arms the match recorder. `BoardView` (`src/gui/board`) draws a board inside the area the scene gives it and turns pointer, arrow, Enter, and typed input into complete moves; it never changes the game. `CellBoardView` implements boards made of selectable cells (any arrangement of rectangles, with arrow-key movement to the nearest cell in that direction and wrap-around), and the per-game views add marks, highlights, and game-specific input such as Numerical's number tray. `Application` refuses to start if a catalogue board game has no view.
+
+`BoardGameScene` applies a human move only while no overlay is open and the human is to move, starts the computer's background search on the computer's turn, and applies its move only after at least `Theme::aiThinkingDelay` (0.35 s) and only while no rules panel or exit confirmation is open. A search that fails or returns an illegal move stops the computer with a visible message instead of retrying. When `takeCompletedOutcome` reports the end, the scene plays the result sound, shows the result panel, and records the game once.
+
+Board-game completion uses `MatchRecorder::beginBoardGame`/`restartBoardGame`/`completeBoardGame`. The profile's player is Player 1 (the first seat) in Human vs Human play and the human against the computer. `MatchService` validates board-game rows against `boardGameSides` (stored sides such as `X`/`O`, `S`/`U`, `Odd`/`Even`, or `First`/`Second` for Word Tic-Tac-Toe, in either order), the `single` format, no draw count, the `standard` difficulty for a computer opponent, and points exactly for the games `boardGameRecordsPoints` names (SUS and 5x5). Classic Tic-Tac-Toe and Ping Pong keep their own rules and reject the `standard` difficulty.
+
 ## Shared turn-based abstractions
 
 `BoardGame_Classes.h` defines the template-based framework used by the board games:
@@ -146,8 +164,8 @@ The scoreboard is shared across games during the current application session. It
 
 ## Current constraints
 
-- The playable board-game user interface and input model remain console-based and synchronous.
-- Classic Tic-Tac-Toe is the graphical turn-based game, Ping Pong is the only graphical arcade game, and the other 13 board games remain console-only.
+- The console application's board-game user interface and input model remain console-based and synchronous.
+- Classic Tic-Tac-Toe, Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, and Misere Tic-Tac-Toe are graphical turn-based games, Ping Pong is the only graphical arcade game, and the other 9 board games remain console-only.
 - Player profiles, completed matches, first achievement unlock timestamps, the active selection, and app-wide settings are persistent local application data; achievement progress and statistics remain derived.
 - Ping Pong currently supports local two-player and local Human-vs-Computer play only; it has no controller support or networking. Completed matches are tracked locally.
 - The shared framework assumes two players taking discrete, alternating turns.

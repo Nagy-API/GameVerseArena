@@ -1,5 +1,10 @@
 #include "GameCatalogue.hpp"
 
+#include "FiveByFiveGame.hpp"
+#include "MisereGame.hpp"
+#include "NumericalGame.hpp"
+#include "SusGame.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -37,6 +42,15 @@ GameDescriptor board(std::string key, std::string name, std::string summary, std
     return game;
 }
 
+// Marks a board game as playable in the shared graphical board-game scenes.
+template <typename Game>
+GameDescriptor playable(GameDescriptor game)
+{
+    game.launch = LaunchKind::BoardGame;
+    game.createGame = [](std::uint32_t) -> std::unique_ptr<turn_based::TurnBasedGame> { return std::make_unique<Game>(); };
+    return game;
+}
+
 std::vector<GameDescriptor> buildCatalogue()
 {
     std::vector<GameDescriptor> games;
@@ -53,39 +67,39 @@ std::vector<GameDescriptor> buildCatalogue()
     classic.launch = LaunchKind::DedicatedScene;
     games.push_back(std::move(classic));
 
-    games.push_back(board(
+    games.push_back(playable<numerical_ttt::NumericalGame>(board(
         "numerical_tic_tac_toe", "Numerical Tic-Tac-Toe", "3x3", "Make any line add up to exactly 15.",
         "Player 1 places the odd numbers 1, 3, 5, 7, and 9; Player 2 places the even numbers 2, 4, 6, and 8. Each "
         "number can be used only once. Whoever completes a full row, column, or diagonal whose three numbers add "
         "up to exactly 15 wins. Nine placements without such a line is a draw.",
         "Plays a random legal move: a random empty cell with one of its unused numbers, as the console game does.",
-        "Odd numbers", "Even numbers", 2, "Play Numerical Tic-Tac-Toe", "NumericalTTT_Board"));
+        "Odd numbers", "Even numbers", 2, "Play Numerical Tic-Tac-Toe", "NumericalTTT_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<sus_game::SusGame>(board(
         "sus", "SUS", "3x3", "Spell S-U-S in lines to score points.",
         "Player 1 always places S and Player 2 always places U, starting with Player 1. Each S-U-S line (row, "
         "column, or diagonal) completed by the letter just placed scores one point for the player who placed it. "
         "When all nine cells are filled, the higher score wins; equal scores draw.",
-        "Uses the console game's scoring heuristic: prefers cells that complete S-U-S lines or block the "
-        "opponent's, then the center and corners.",
-        "S", "U", 3, "Play SUS", "SUS_Board"));
+        "The console game's scoring heuristic: each empty cell scores 100 for every S-U-S its letter would "
+        "complete there and 80 for every S-U-S the opponent's letter would complete there, plus small bonuses "
+        "for the center, corners, and partly built rows and columns; it plays the highest-scoring cell.",
+        "S", "U", 3, "Play SUS", "SUS_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<five_by_five::FiveByFiveGame>(board(
         "five_by_five_tic_tac_toe", "5x5 Tic-Tac-Toe", "5x5", "Score the most three-in-a-rows on a 5x5 board.",
         "X and O alternate on a 5x5 grid, X first. The game ends after 24 moves, leaving one cell empty. Every run "
         "of three of the same mark in a row, column, or diagonal scores a point, and overlapping runs count "
         "separately. The higher score wins; equal scores draw.",
-        "The console game's priority heuristic: look for a cell that leaves it holding a three-in-a-row, then one "
-        "that would leave the opponent holding one, then take the center, a corner, or the first free cell. It "
-        "checks whole-board totals, so once either player holds any three it simply takes the first free cell.",
-        "X", "O", 4, "Play 5x5 Tic Tac Toe", "Five_TTT_Board"));
+        "The console game's priority heuristic: make a new three-in-a-row if it can, otherwise block one the "
+        "opponent could make next, otherwise take the center, a corner, or the first free cell.",
+        "X", "O", 4, "Play 5x5 Tic Tac Toe", "Five_TTT_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<misere::MisereGame>(board(
         "misere_tic_tac_toe", "Misere Tic-Tac-Toe", "3x3", "Avoid completing three in a row.",
         "X and O alternate on a 3x3 grid, X first. Whoever completes a line of three of their own marks loses. A "
         "full grid without a line is a draw.",
         "Full-depth minimax search, as in the console game: it never completes a line if it can avoid it.",
-        "X", "O", 5, "Play Misere", "MISERE_Board"));
+        "X", "O", 5, "Play Misere", "MISERE_Board")));
 
     games.push_back(board(
         "four_in_a_row", "Four-in-a-Row", "6x7 drop", "Drop discs and connect four.",

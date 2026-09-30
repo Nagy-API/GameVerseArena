@@ -65,7 +65,7 @@ void ProfileStatsScene::onActivate()
         select(0);
         return;
     }
-    empty_.setString(overall.matches==0?"No matches yet.\nPlay Tic-Tac-Toe or Ping Pong to build your history.":"");
+    empty_.setString(overall.matches==0?"No matches yet.\nPlay any game from the library to build your history.":"");
     cards_[0].setString("OVERALL\n\nMatches  "+std::to_string(overall.matches)+"\nWins / Losses / Draws  "+std::to_string(overall.wins)+" / "+std::to_string(overall.losses)+" / "+std::to_string(overall.draws)+"\nWin rate  "+rate(overall.winRate)+"\nPlay time  "+duration(overall.totalDurationMs)+"\nCurrent / best streak  "+std::to_string(overall.currentWinStreak)+" / "+std::to_string(overall.bestWinStreak)+"\nLast played  "+played(overall.lastPlayedAt));
     cards_[1].setString("CLASSIC TIC-TAC-TOE\n\nMatches  "+std::to_string(ttt.matches)+"\nW / L / D  "+std::to_string(ttt.wins)+" / "+std::to_string(ttt.losses)+" / "+std::to_string(ttt.draws)+"\nWin rate  "+rate(ttt.winRate)+"\nPlay time  "+duration(ttt.totalDurationMs)+"\nAs X / O  "+std::to_string(ttt.ticTacToeAsX)+" / "+std::to_string(ttt.ticTacToeAsO)+"\nSingle / BO3 / BO5  "+std::to_string(ttt.singleMatches)+" / "+std::to_string(ttt.bestOfThreeMatches)+" / "+std::to_string(ttt.bestOfFiveMatches));
     cards_[2].setString("PING PONG\n\nMatches  "+std::to_string(pong.matches)+"\nWins / Losses  "+std::to_string(pong.wins)+" / "+std::to_string(pong.losses)+"\nWin rate  "+rate(pong.winRate)+"\nPlay time  "+duration(pong.totalDurationMs)+"\nPoints for / against  "+std::to_string(pong.pointsScored)+" / "+std::to_string(pong.pointsConceded)+"\nBest final margin  "+std::to_string(pong.bestFinalMargin));

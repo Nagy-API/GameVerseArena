@@ -17,8 +17,6 @@ std::int64_t MatchService::recordCompleted(const CompletedMatch& match)
 
 void MatchService::validate(const CompletedMatch& value)
 {
-    if (value.game != GameKey::ClassicTicTacToe && value.game != GameKey::PingPong)
-        throw std::invalid_argument("This build cannot record completed matches for that game");
     if (value.profileId <= 0 || value.opponentName.empty() || value.profileDisplayName.empty() ||
         value.matchFormat.empty()) throw std::invalid_argument("Completed match is missing required data");
     if (value.durationMs < 0) throw std::invalid_argument("Match duration cannot be negative");
@@ -28,18 +26,28 @@ void MatchService::validate(const CompletedMatch& value)
         throw std::invalid_argument("Human-vs-human match cannot have AI difficulty");
     if (value.mode == MatchMode::HumanVsComputer && value.difficulty == DifficultyKey::None)
         throw std::invalid_argument("Human-vs-computer match requires AI difficulty");
-    if (value.game == GameKey::PingPong && value.result == MatchResult::Draw)
-        throw std::invalid_argument("Ping Pong cannot end in a draw");
-    if (!value.profileScore || !value.opponentScore)
-        throw std::invalid_argument("Completed match requires a final score");
-    if (*value.profileScore < 0 || *value.opponentScore < 0)
-        throw std::invalid_argument("Completed match scores cannot be negative");
-    const bool scoreSaysWin = *value.profileScore > *value.opponentScore;
-    const bool scoreSaysLoss = *value.profileScore < *value.opponentScore;
-    if ((value.result == MatchResult::Win && !scoreSaysWin) ||
-        (value.result == MatchResult::Loss && !scoreSaysLoss) ||
-        (value.result == MatchResult::Draw && *value.profileScore != *value.opponentScore))
-        throw std::invalid_argument("Match result contradicts the final score");
+
+    const bool hasScore = value.profileScore.has_value() || value.opponentScore.has_value();
+    if (hasScore) {
+        if (!value.profileScore || !value.opponentScore)
+            throw std::invalid_argument("Completed match requires both final scores");
+        if (*value.profileScore < 0 || *value.opponentScore < 0)
+            throw std::invalid_argument("Completed match scores cannot be negative");
+        const bool scoreSaysWin = *value.profileScore > *value.opponentScore;
+        const bool scoreSaysLoss = *value.profileScore < *value.opponentScore;
+        if ((value.result == MatchResult::Win && !scoreSaysWin) ||
+            (value.result == MatchResult::Loss && !scoreSaysLoss) ||
+            (value.result == MatchResult::Draw && *value.profileScore != *value.opponentScore))
+            throw std::invalid_argument("Match result contradicts the final score");
+    }
+
+    if (value.game == GameKey::ClassicTicTacToe || value.game == GameKey::PingPong) {
+        // Their computer opponents offer Easy, Medium, and Hard; 'standard' belongs to the
+        // single-strategy board games.
+        if (value.difficulty == DifficultyKey::Standard)
+            throw std::invalid_argument("This game's computer difficulty must be Easy, Medium, or Hard");
+        if (!hasScore) throw std::invalid_argument("Completed match requires a final score");
+    }
 
     if (value.game == GameKey::ClassicTicTacToe) {
         const bool validFormat = value.matchFormat == "single" || value.matchFormat == "best_of_3" ||
@@ -56,13 +64,37 @@ void MatchService::validate(const CompletedMatch& value)
         } else if (std::max(*value.profileScore, *value.opponentScore) != winsNeeded) {
             throw std::invalid_argument("Tic-Tac-Toe score has not completed its match format");
         }
-    } else {
+        return;
+    }
+
+    if (value.game == GameKey::PingPong) {
+        if (value.result == MatchResult::Draw) throw std::invalid_argument("Ping Pong cannot end in a draw");
         if (value.matchFormat != "first_to_5" || value.drawValue ||
             value.profileSideOrMark != std::optional<std::string>{"Left"} ||
             value.opponentSideOrMark != std::optional<std::string>{"Right"} ||
             std::max(*value.profileScore, *value.opponentScore) != 5 ||
             std::min(*value.profileScore, *value.opponentScore) >= 5)
             throw std::invalid_argument("Ping Pong score is not a completed first-to-five match");
+        return;
     }
+
+    // The shared board games: one game per match, a single-strategy computer opponent, the
+    // game's own side labels, and points only for the games that score them.
+    const auto sides = boardGameSides(value.game);
+    if (!sides) throw std::invalid_argument("Completed match names an unknown game");
+    if (value.matchFormat != "single" || value.drawValue)
+        throw std::invalid_argument("Board game completion must be a single game");
+    if (value.mode == MatchMode::HumanVsComputer && value.difficulty != DifficultyKey::Standard)
+        throw std::invalid_argument("Board game computer opponents use the standard strategy");
+    const bool sidesValid = value.profileSideOrMark && value.opponentSideOrMark &&
+        ((*value.profileSideOrMark == sides->first && *value.opponentSideOrMark == sides->second) ||
+         (*value.profileSideOrMark == sides->second && *value.opponentSideOrMark == sides->first));
+    if (!sidesValid) throw std::invalid_argument("Board game sides are invalid for that game");
+    if (boardGameRecordsPoints(value.game) != hasScore)
+        throw std::invalid_argument(hasScore ? "That board game does not record points"
+                                             : "That board game requires its final points");
+    if (hasScore && static_cast<long long>(*value.profileScore) + *value.opponentScore >
+                        boardGameMaximumTotalPoints(value.game))
+        throw std::invalid_argument("Board game points exceed what the board allows");
 }
 } // namespace persistence

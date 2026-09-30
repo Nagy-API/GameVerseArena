@@ -159,15 +159,37 @@ target_include_directories(GameVerseArenaPingPong PUBLIC
 target_compile_features(GameVerseArenaPingPong PUBLIC cxx_std_17)
 gva_strict_warnings(GameVerseArenaPingPong)
 
+# The original board games rebuilt for the graphical app: SFML-independent rules and computer
+# strategies behind the shared turn-based contract, plus the session and background search.
+find_package(Threads REQUIRED)
+add_library(GameVerseArenaBoardGames
+    "src/games/common/BoardGameSession.cpp"
+    "src/games/common/ComputerMoveTask.cpp"
+    "src/games/numerical/NumericalGame.cpp"
+    "src/games/sus/SusGame.cpp"
+    "src/games/five_by_five/FiveByFiveGame.cpp"
+    "src/games/misere/MisereGame.cpp"
+)
+target_include_directories(GameVerseArenaBoardGames PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/common"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/numerical"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/sus"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/five_by_five"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/misere"
+)
+target_compile_features(GameVerseArenaBoardGames PUBLIC cxx_std_17)
+target_link_libraries(GameVerseArenaBoardGames PUBLIC Threads::Threads)
+gva_strict_warnings(GameVerseArenaBoardGames)
+
 # The graphical game catalogue (registry metadata and board-game factories).
 add_library(GameVerseArenaCatalogue
     "src/catalogue/GameCatalogue.cpp"
 )
 target_include_directories(GameVerseArenaCatalogue PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/catalogue"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/common"
 )
 target_compile_features(GameVerseArenaCatalogue PUBLIC cxx_std_17)
+target_link_libraries(GameVerseArenaCatalogue PUBLIC GameVerseArenaBoardGames)
 gva_strict_warnings(GameVerseArenaCatalogue)
 
 # ---------------------------------------------------------------------------
@@ -182,6 +204,21 @@ target_compile_definitions(GameVerseArenaCatalogueTests PRIVATE
 target_compile_features(GameVerseArenaCatalogueTests PRIVATE cxx_std_17)
 gva_strict_warnings(GameVerseArenaCatalogueTests)
 add_test(NAME GameCatalogueTests COMMAND GameVerseArenaCatalogueTests)
+
+# Rules, computer strategy, and contract tests for each graphical board game.
+function(gva_board_game_test name)
+    add_executable(GameVerseArena${name} "tests/${name}.cpp")
+    target_link_libraries(GameVerseArena${name} PRIVATE GameVerseArenaBoardGames)
+    target_compile_features(GameVerseArena${name} PRIVATE cxx_std_17)
+    gva_strict_warnings(GameVerseArena${name})
+    add_test(NAME ${name} COMMAND GameVerseArena${name})
+endfunction()
+
+gva_board_game_test(BoardGameSessionTests)
+gva_board_game_test(NumericalGameTests)
+gva_board_game_test(SusGameTests)
+gva_board_game_test(FiveByFiveGameTests)
+gva_board_game_test(MisereGameTests)
 
 add_executable(GameVerseArenaTests
     "tests/TicTacToeTests.cpp"
@@ -300,6 +337,16 @@ add_executable(GameVerseArenaGUI
     "src/gui/PingPongGameScene.cpp"
     "src/gui/PingPongPauseOverlay.cpp"
     "src/gui/PingPongResultOverlay.cpp"
+    "src/gui/BoardGameSetupScene.cpp"
+    "src/gui/BoardGameScene.cpp"
+    "src/gui/BoardGameResultOverlay.cpp"
+    "src/gui/BoardGameRulesOverlay.cpp"
+    "src/gui/board/BoardViews.cpp"
+    "src/gui/board/CellBoardView.cpp"
+    "src/gui/board/NumericalBoardView.cpp"
+    "src/gui/board/SusBoardView.cpp"
+    "src/gui/board/FiveByFiveBoardView.cpp"
+    "src/gui/board/MisereBoardView.cpp"
     "src/gui/ProfilesScene.cpp"
     "src/gui/ProfileStatsScene.cpp"
     "src/gui/ProfileAchievementsScene.cpp"
@@ -314,7 +361,11 @@ set_target_properties(GameVerseArenaGUI PROPERTIES
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
 )
-target_include_directories(GameVerseArenaGUI PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_include_directories(GameVerseArenaGUI PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gui/board"
+)
 gva_strict_warnings(GameVerseArenaGUI)
 
 if(WIN32)

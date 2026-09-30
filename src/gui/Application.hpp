@@ -6,6 +6,7 @@
 #include "AppContext.hpp"
 #include "AssetManager.hpp"
 #include "AudioEngine.hpp"
+#include "BoardGameHost.hpp"
 #include "Database.hpp"
 #include "GameLauncher.hpp"
 #include "MatchRecorder.hpp"
@@ -59,6 +60,7 @@ private:
     std::unique_ptr<AudioEngine> audio_;
     classic_ttt::TicTacToeSession ticTacToeSession_;
     ping_pong::PingPongSession pingPongSession_;
+    BoardGameHost boardGameHost_;
     std::unique_ptr<persistence::Database> database_;
     std::unique_ptr<persistence::ProfileService> profileService_;
     std::unique_ptr<persistence::SettingsService> settingsService_;
@@ -66,6 +68,7 @@ private:
     std::unique_ptr<persistence::MatchService> matchService_;
     std::unique_ptr<persistence::MatchRecorder> ticTacToeRecorder_;
     std::unique_ptr<persistence::MatchRecorder> pingPongRecorder_;
+    std::unique_ptr<persistence::MatchRecorder> boardGameRecorder_;
     std::unique_ptr<persistence::MatchRepository> matchRepository_;
     std::unique_ptr<persistence::StatisticsRepository> statisticsRepository_;
     std::unique_ptr<persistence::AchievementService> achievementService_;

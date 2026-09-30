@@ -1,6 +1,9 @@
 #include "Application.hpp"
 
 #include "AboutScene.hpp"
+#include "BoardGameScene.hpp"
+#include "BoardGameSetupScene.hpp"
+#include "BoardViews.hpp"
 #include "DatabasePaths.hpp"
 #include "GameLibraryScene.hpp"
 #include "MainMenuScene.hpp"
@@ -161,6 +164,7 @@ bool Application::initialize()
         matchService_ = std::make_unique<persistence::MatchService>(*database_);
         ticTacToeRecorder_ = std::make_unique<persistence::MatchRecorder>(*matchService_);
         pingPongRecorder_ = std::make_unique<persistence::MatchRecorder>(*matchService_);
+        boardGameRecorder_ = std::make_unique<persistence::MatchRecorder>(*matchService_);
         matchRepository_ = std::make_unique<persistence::MatchRepository>(*database_);
         statisticsRepository_ = std::make_unique<persistence::StatisticsRepository>(*database_);
         achievementService_ = std::make_unique<persistence::AchievementService>(*database_);
@@ -191,10 +195,17 @@ bool Application::initialize()
     launcher_ = std::make_unique<GameLauncher>(scenes_);
     launcher_->bindDedicatedScene("classic_tic_tac_toe", SceneId::TicTacToeSetup);
     launcher_->bindDedicatedScene("ping_pong", SceneId::PingPongSetup);
-    // The catalogue's "playable" flag and the launcher must agree for every game, or the library
-    // would advertise a game it cannot start (or hide one it can).
+    launcher_->setBoardGameLauncher([this](const catalogue::GameDescriptor& game) {
+        boardGameHost_.game = &game;
+        scenes_.switchTo(SceneId::BoardGameSetup);
+    });
+    // The catalogue's "playable" flag and the launcher must agree for every game, and every shared
+    // board game needs its board view, or the library would advertise a game it cannot start (or
+    // hide one it can).
     for (const auto& game : catalogue::all()) {
-        if (game.playableInGui() != launcher_->canLaunch(game)) {
+        const bool viewAvailable =
+            game.launch != catalogue::LaunchKind::BoardGame || board_view::createBoardView(game.key) != nullptr;
+        if (game.playableInGui() != launcher_->canLaunch(game) || !viewAvailable) {
             reportFatal("Internal error", "The game library entry '" + game.key +
                                               "' does not match the available game scenes.");
             return false;
@@ -209,6 +220,10 @@ bool Application::initialize()
         context, pingPongSession_, *profileService_, *pingPongRecorder_));
     scenes_.add(SceneId::PingPongGame, std::make_unique<PingPongGameScene>(
         context, pingPongSession_, *pingPongRecorder_, *achievementService_, achievementNotifications_));
+    scenes_.add(SceneId::BoardGameSetup, std::make_unique<BoardGameSetupScene>(
+        context, boardGameHost_, *profileService_, *boardGameRecorder_));
+    scenes_.add(SceneId::BoardGame, std::make_unique<BoardGameScene>(
+        context, boardGameHost_, *boardGameRecorder_, *achievementService_, achievementNotifications_));
     scenes_.add(SceneId::Settings, std::make_unique<SettingsScene>(context));
     const auto playable = catalogue::playableCount();
     const auto total = catalogue::all().size();

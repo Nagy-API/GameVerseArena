@@ -3,9 +3,9 @@
 GameVerseArena is a C++17 games platform with two independently buildable applications:
 
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
-- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history, derived statistics and achievements, persistent audio and accessibility settings, procedural sound effects, a game library, graphical Classic Tic-Tac-Toe, and real-time Ping Pong.
+- `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history, derived statistics and achievements, persistent audio and accessibility settings, procedural sound effects, a game library, graphical versions of the original board games (Classic Tic-Tac-Toe plus the games listed under [Board games in the GUI](#board-games-in-the-gui)), and real-time Ping Pong.
 
-Classic Tic-Tac-Toe and Ping Pong are playable in the GUI. The other 13 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
+Classic Tic-Tac-Toe, Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, and Ping Pong are playable in the GUI. The other 9 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
 ## Games
 
@@ -56,6 +56,11 @@ cmake --build build --config Release --target GameVerseArenaSchemaSafetyTests
 cmake --build build --config Release --target GameVerseArenaAudioTests
 cmake --build build --config Release --target GameVerseArenaAudioEngineTests
 cmake --build build --config Release --target GameVerseArenaCatalogueTests
+cmake --build build --config Release --target GameVerseArenaBoardGameSessionTests
+cmake --build build --config Release --target GameVerseArenaNumericalGameTests
+cmake --build build --config Release --target GameVerseArenaSusGameTests
+cmake --build build --config Release --target GameVerseArenaFiveByFiveGameTests
+cmake --build build --config Release --target GameVerseArenaMisereGameTests
 ctest --test-dir build --output-on-failure
 ```
 
@@ -106,19 +111,21 @@ The existing Visual Studio solution and project files remain available for IDE b
 
 Choose **Profiles** from the main menu to create, rename, delete, and select local player profiles. Profile names are trimmed, limited to 24 Unicode text units, reject control characters, and must be unique without regard to ASCII letter casing. A fresh database contains exactly one active `Player 1` profile.
 
-The active profile persists across application restarts and supplies the initial Player 1 name in both Classic Tic-Tac-Toe and Ping Pong setup. That setup field remains freely editable for each match; editing it affects only the match and never renames the stored profile. Deleting the active profile automatically selects the most recently used remaining profile. Deleting the last profile safely recreates and activates `Player 1`.
+The active profile persists across application restarts and supplies the initial Player 1 name in every game's setup. That setup field remains freely editable for each match; editing it affects only the match and never renames the stored profile. Deleting the active profile automatically selects the most recently used remaining profile. Deleting the last profile safely recreates and activates `Player 1`.
 
 On Windows, profile data is stored at `%LOCALAPPDATA%\GameVerseArena\gameverse.db`. Other platforms use `$XDG_DATA_HOME/GameVerseArena/gameverse.db`, then `$HOME/.local/share/GameVerseArena/gameverse.db`, with the system temporary directory as a final fallback. Profiles, history, statistics, and achievements remain local to the machine; cloud synchronization is not implemented.
 
 ## Match history and statistics
 
-Select a profile under **Profiles**, then choose **View Stats**. The statistics view shows overall results, play time, last-played time, current and best win streaks, and focused Classic Tic-Tac-Toe and Ping Pong totals. **Recent Matches** opens a bounded, newest-first history with game and result filters plus Previous/Next pagination.
+Select a profile under **Profiles**, then choose **View Stats**. The statistics view shows overall results, play time, last-played time, current and best win streaks, and focused Classic Tic-Tac-Toe and Ping Pong totals; every other graphical game counts toward the overall totals. **Recent Matches** opens a bounded, newest-first history with game and result filters plus Previous/Next pagination.
 
-Only graphical Classic Tic-Tac-Toe and graphical Ping Pong are tracked. The persistent owner is the active profile captured when the match starts; editing Player 1's match-time display name does not change ownership. Guests and computers never receive hidden profiles. Human-vs-Computer results are stored from the active human profile's perspective.
+Every game played in the graphical app is tracked; the console application keeps no history. The persistent owner is the active profile captured when the match starts; editing Player 1's match-time display name does not change ownership. Guests and computers never receive hidden profiles. Human-vs-Computer results are stored from the active human profile's perspective.
 
-One row is written only when a complete Single Game, Best of 3, Best of 5, or first-to-5 Ping Pong match reaches its final result. Tic-Tac-Toe rounds are not separate history rows. Abandoned matches, incomplete restarts, setup screens, and Return-to-Library before completion are not recorded. A focused completion guard permits one persistence attempt per match even when overlays keep updating or receive repeated input.
+One row is written only when a complete Single Game, Best of 3, Best of 5, or first-to-5 Ping Pong match, or a board game played in the shared board-game scenes, reaches its final result. Tic-Tac-Toe rounds are not separate history rows. Abandoned matches, incomplete restarts, setup screens, and Return-to-Library before completion are not recorded. A focused completion guard permits one persistence attempt per match even when overlays keep updating or receive repeated input.
 
 Statistics are always recomputed from completed match history; profile rows contain no duplicated win/loss counters. Win rate is wins divided by all completed matches, including draws in the denominator. A loss or draw breaks a win streak. Deleting a profile cascades deletion to its local history.
+
+Each shared board game is recorded as one single game. SUS and 5x5 Tic-Tac-Toe store both players' points; the other board games store only the result. Their computer opponents have one strategy each, stored as the `standard` difficulty. In Human vs Human play the stored side is Player 1's, which is always the side that moves first.
 
 History rows store UTC epoch-millisecond start/completion timestamps and a monotonic active duration. Setup and result-overlay time are excluded, and paused Ping Pong time is excluded. Three history indexes support newest-first profile pages and SQL game/result filters without loading an unbounded list.
 
@@ -173,12 +180,12 @@ Each category's loudness is Master Volume multiplied by the category volume. Mut
 All sound effects are short, original tones generated in memory when the application starts; no audio files are shipped and there is no background music. Sounds are grouped into three categories:
 
 - UI: focus/hover changes, confirm, back, and validation errors.
-- Gameplay: Tic-Tac-Toe X and O moves and win/draw/loss results; Ping Pong paddle hits, wall bounces, points, and the match result.
+- Gameplay: board-game moves (one tone for the side that moves first, another for the second), scoring moves in SUS and 5x5 Tic-Tac-Toe, and win/draw/loss results; Ping Pong paddle hits, wall bounces, points, and the match result.
 - Achievement: the unlock chime when an achievement toast appears.
 
 At most 12 effects play at once; a new effect reuses the oldest voice. If no audio output device is available, the application runs silently and Settings still work and save.
 
-Reduced Motion turns off decorative motion: button hover/focus easing, the achievement toast slide-in, the Tic-Tac-Toe mark pop-in and selection pulse, and the Ping Pong ball trail. Focus highlights, marks, and every result message stay visible, and gameplay speed, physics, AI timing, and timers are never changed.
+Reduced Motion turns off decorative motion: button hover/focus easing, the achievement toast slide-in, the mark pop-in and selection pulse on every board, and the Ping Pong ball trail. Focus highlights, marks, and every result message stay visible, and gameplay speed, physics, AI timing, and timers are never changed.
 
 ## GUI shell controls
 
@@ -215,6 +222,24 @@ Choose **Play**, select **Classic Tic-Tac-Toe**, complete Player Setup, and star
 Setup is fully keyboard accessible: use Up/Down or Tab to move, Left/Right to change choices, Enter to edit names or activate a control, Backspace to edit, and Escape to go back. During a match, use the arrow keys to select a board cell and Enter or Space to play it. Mouse hover and click are supported throughout. Escape or **Back to Library** opens a confirmation before discarding an active in-memory match.
 
 The active profile provides Player 1's initial setup name. Match-specific display-name edits are preserved in history while ownership remains tied to the captured profile ID.
+
+## Board games in the GUI
+
+Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, and Misere Tic-Tac-Toe are played in shared board-game scenes. Choose one in the library to open its setup:
+
+- **Game mode**: Human vs Human or Human vs Computer.
+- **Player names**: Player 1 starts as the active profile's name; both names can be edited for this game only.
+- **Your side** (against the computer): play the side that moves first or the side that moves second. In Human vs Human play, Player 1 always takes the side that moves first.
+- The right-hand panel shows the game's rules and describes its computer opponent.
+
+During a game, the side panels show each player's side, name, points (SUS and 5x5), and whose turn it is, and the line under the board says what to do next. Move the cell cursor with the arrow keys and play with Enter or Space, or click a cell. In Numerical Tic-Tac-Toe, choose a number with the number keys or the tray under the board (the lowest unused number is preselected each turn) and then place it. Tab moves the focus to **Restart Game**, **Rules**, and **Back to Library**; F1 opens the rules. Escape or **Back to Library** asks for confirmation before discarding a game in progress. The computer searches on a background thread, so the window stays responsive, and it waits at least 0.35 seconds before moving.
+
+When a game ends, the result panel names the winner and the reason and shows the final points where the game has them. **Rematch** starts the next game with the same players, **View Final Board** (or Escape) hides the panel so the finished board can be studied, **New Setup** returns to the setup, and **Return to Library** leaves. Restarting a game in progress discards it without recording it.
+
+The graphical versions keep the console games' rules and computer strategies, with these deliberate differences:
+
+- Numerical Tic-Tac-Toe credits the player whose placement completes a 15-line, as the console game's result message does; the console scoreboard credits Player 1 for every Numerical win because its result check does not know who moved last.
+- The 5x5 computer looks for a cell that makes a *new* three-in-a-row for itself, then for one that would give the opponent a new one (to block it). The console version tested whole-board totals instead: once the computer held any three it always took the first free cell, and once the opponent held any three it stopped blocking and took the first free cell whenever it had no new three of its own to make.
 
 ## Ping Pong in the GUI
 

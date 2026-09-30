@@ -78,7 +78,7 @@ void MatchHistoryScene::reload()
             shortName(match.profileDisplayName) + " vs " + shortName(match.opponentName) + "  |  " + score +
             "  |  " + mode + "  |  " + std::to_string(match.durationMs / 1000) + "s  |  " + date(match.completedAt));
     }
-    empty_.setString(total_ == 0 ? "No matches match these filters.\nPlay Tic-Tac-Toe or Ping Pong to build your history." : "");
+    empty_.setString(total_ == 0 ? "No matches match these filters.\nPlay any game from the library to build your history." : "");
     refresh();
 }
 void MatchHistoryScene::refresh(){static const std::array<const char*,3> games{"Game: All","Game: Tic-Tac-Toe","Game: Ping Pong"};static const std::array<const char*,4> results{"Result: All","Result: Win","Result: Loss","Result: Draw"};buttons_[0].setText(games[gameFilter_]);buttons_[1].setText(results[resultFilter_]);const auto list=profiles_.listProfiles();const auto found=std::find_if(list.begin(),list.end(),[this](const auto&p){return p.id==profileId_;});subtitle_.setString(found==list.end()?"Selected profile":found->displayName);const std::size_t pages=total_==0?1:(static_cast<std::size_t>(total_)+pageSize-1)/pageSize;status_.setString("Page "+std::to_string(page_+1)+" of "+std::to_string(pages)+"  |  "+std::to_string(total_)+" matches");for(std::size_t i=0;i<buttons_.size();++i)buttons_[i].setSelected(i==selected_);}

@@ -213,13 +213,18 @@ void testEveryAcceptedGameKeyIsReadable(const std::filesystem::path& directory)
 
     if (page.empty()) return;
     persistence::MatchService service(database);
-    persistence::CompletedMatch unsupported = page.front();
-    unsupported.game = persistence::GameKey::Sus;
-    unsupported.profileScore = 1;
-    unsupported.opponentScore = 0;
+    persistence::CompletedMatch board = page.front();
+    board.game = persistence::GameKey::Sus;
+    board.profileScore = 1;
+    board.opponentScore = 0;
     rejected = false;
-    try { service.recordCompleted(unsupported); } catch (const std::invalid_argument&) { rejected = true; }
-    check(rejected, "this build refuses to record games it cannot validate yet");
+    try { service.recordCompleted(board); } catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected, "a board game row without its side labels is refused");
+    board.profileSideOrMark = "S";
+    board.opponentSideOrMark = "U";
+    bool accepted = true;
+    try { service.recordCompleted(board); } catch (const std::exception&) { accepted = false; }
+    check(accepted, "the same row with valid SUS sides is recorded");
 }
 
 void testExactTextLength(const std::filesystem::path& directory)

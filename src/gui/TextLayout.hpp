@@ -7,6 +7,13 @@
 #include <sstream>
 #include <string>
 
+// Converts UTF-8 text (names, catalogue text) for display; std::string would otherwise be
+// decoded with the system code page.
+inline sf::String toDisplay(const std::string& utf8)
+{
+    return sf::String::fromUtf8(utf8.begin(), utf8.end());
+}
+
 namespace text_layout_detail {
 inline float widthOf(const sf::Font& font, const std::string& utf8, unsigned int size)
 {

@@ -81,6 +81,22 @@ struct GameStatistics : OverallStatistics {
     std::int64_t bestOfFiveMatches{};
 };
 
+// Stored side labels for the board games played as a single game in the shared board-game
+// scenes (every board game except Classic Tic-Tac-Toe, which has its own match formats).
+struct BoardGameSides {
+    const char* first;   // the seat that moves first
+    const char* second;
+};
+
+// Side labels for a shared board game; nullopt for Classic Tic-Tac-Toe and Ping Pong.
+std::optional<BoardGameSides> boardGameSides(GameKey game) noexcept;
+// Whether a shared board game has points to store (SUS lines, 5x5 three-in-a-rows). The other
+// board games store no score, only the result.
+bool boardGameRecordsPoints(GameKey game) noexcept;
+// The most points both players together can hold at the end of such a game: every S-U-S line of
+// the 3x3 grid (8) or every run of three on the 5x5 grid (48). Zero for games without points.
+int boardGameMaximumTotalPoints(GameKey game) noexcept;
+
 const char* toStorage(GameKey value) noexcept;
 const char* toStorage(MatchMode value) noexcept;
 const char* toStorage(MatchResult value) noexcept;

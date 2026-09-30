@@ -13,6 +13,40 @@ const std::vector<GameKey>& allGameKeys()
     return keys;
 }
 
+std::optional<BoardGameSides> boardGameSides(GameKey game) noexcept
+{
+    switch (game) {
+    case GameKey::ClassicTicTacToe:
+    case GameKey::PingPong: return std::nullopt;
+    case GameKey::NumericalTicTacToe: return BoardGameSides{"Odd", "Even"};
+    case GameKey::Sus: return BoardGameSides{"S", "U"};
+    case GameKey::WordTicTacToe: return BoardGameSides{"First", "Second"};
+    case GameKey::FiveByFiveTicTacToe:
+    case GameKey::MisereTicTacToe:
+    case GameKey::FourInARow:
+    case GameKey::FourByFourTicTacToe:
+    case GameKey::PyramidTicTacToe:
+    case GameKey::Diamond:
+    case GameKey::InfinityXo:
+    case GameKey::UltimateXo:
+    case GameKey::MemoryXo:
+    case GameKey::ObstacleTicTacToe: return BoardGameSides{"X", "O"};
+    }
+    return std::nullopt;
+}
+
+bool boardGameRecordsPoints(GameKey game) noexcept
+{
+    return game == GameKey::Sus || game == GameKey::FiveByFiveTicTacToe;
+}
+
+int boardGameMaximumTotalPoints(GameKey game) noexcept
+{
+    if (game == GameKey::Sus) return 8;
+    if (game == GameKey::FiveByFiveTicTacToe) return 48;
+    return 0;
+}
+
 const char* toStorage(GameKey value) noexcept
 {
     switch (value) {

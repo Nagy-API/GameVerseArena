@@ -129,6 +129,16 @@ void testDescriptorsAreComplete()
         const bool dedicated = game.key == "classic_tic_tac_toe" || game.key == "ping_pong";
         check((game.launch == catalogue::LaunchKind::DedicatedScene) == dedicated,
               name + ": only Classic Tic-Tac-Toe and Ping Pong use dedicated scenes");
+        // Every board game other than Classic Tic-Tac-Toe is recorded through the shared
+        // board-game rules, so it must have stored side labels.
+        bool recordable = false;
+        try {
+            recordable = persistence::boardGameSides(persistence::gameKeyFromStorage(game.key)).has_value();
+        } catch (const std::exception&) {
+            recordable = false;
+        }
+        check(recordable == (game.category == catalogue::GameCategory::Board && !dedicated),
+              name + ": shared board games have stored side labels");
     }
 }
 
@@ -159,6 +169,11 @@ void testEveryPlayableGameCanStart()
         turn_based::CancelToken cancel;
         const auto move = instance->chooseComputerMove(random, cancel);
         check(move && instance->isLegal(*move), game.displayName + " computer returns a legal opening move");
+        // The shared board-game scene records scores() as the match points, which history accepts
+        // only for the games that score them.
+        const bool storesPoints = persistence::boardGameRecordsPoints(persistence::gameKeyFromStorage(game.key));
+        check(instance->scores().has_value() == storesPoints,
+              game.displayName + " reports points exactly when its history stores them");
     }
     check(launchable == catalogue::playableCount(), "every playable game has a launch path and vice versa");
     check(launchable >= dedicatedScenes.size(), "at least the two dedicated games can start");

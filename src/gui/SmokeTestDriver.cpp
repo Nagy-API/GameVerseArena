@@ -2,7 +2,11 @@
 
 #include "Application.hpp"
 #include "AudioEngine.hpp"
+#include "BoardGameScene.hpp"
+#include "BoardGameSetupScene.hpp"
+#include "CellBoardView.hpp"
 #include "GameLibraryScene.hpp"
+#include "NumericalGame.hpp"
 #include "PingPongGameScene.hpp"
 
 #include <SFML/Window/Event.hpp>
@@ -51,6 +55,7 @@ int SmokeTestDriver::run()
     scenarioLibrary();
     scenarioTicTacToe();
     scenarioPingPong();
+    scenarioBoardGames();
 
     expect(app_.audio_->voiceCount() == AudioEngine::voiceLimit, "the voice pool never grew while sounds played");
     log_ << "\nChecks: " << checks_ << "  Failures: " << failures_ << "  Captures: " << captures_ << '\n';
@@ -374,7 +379,7 @@ void SmokeTestDriver::scenarioLibrary()
     expect(library->firstVisibleRow() == 0, "the grid scrolls back to the top");
 
     // A board game that is not migrated yet must not start a scene and must explain why.
-    type("sus");
+    type("ultimate");
     key(sf::Keyboard::Key::Enter);
     key(sf::Keyboard::Key::Enter);
     expectScene(SceneId::GameLibrary, "a console-only game does not open a scene");
@@ -511,5 +516,249 @@ void SmokeTestDriver::scenarioPingPong()
     key(sf::Keyboard::Key::Enter);
     expectScene(SceneId::GameLibrary, "Return to Library leaves the paused match");
     expect(historyCount() == historyBefore, "an abandoned Ping Pong match writes no history");
+    goToMainMenu();
+}
+
+// ---------------------------------------------------------------------------------------
+// Shared board games
+// ---------------------------------------------------------------------------------------
+
+namespace {
+// Logical centres of the board-game setup rows and buttons, and of the board scene's controls.
+sf::Vector2f setupRow(int index) { return {72.f + 274.f, 180.f + static_cast<float>(index) * 96.f + 40.f}; }
+constexpr sf::Vector2f setupStart{958.f + 125.f, 580.f + 28.f};
+constexpr sf::Vector2f boardBack{55.f + 95.f, 30.f + 25.f};
+constexpr sf::Vector2f boardRestart{935.f + 145.f, 500.f + 25.f};
+constexpr sf::Vector2f exitLeave{425.f + 95.f, 425.f + 26.f};
+sf::Vector2f resultButton(int index) { return {435.f + 205.f, 340.f + static_cast<float>(index) * 62.f + 26.f}; }
+} // namespace
+
+bool SmokeTestDriver::startBoardGame(const std::string& search, bool againstComputer, bool humanFirst,
+                                     const std::string& setupCapture)
+{
+    openLibrary();
+    type(search);
+    clickLibraryCard(0);
+    if (!expectScene(SceneId::BoardGameSetup, "'" + search + "' opens the shared board-game setup")) return false;
+    auto* setup = dynamic_cast<BoardGameSetupScene*>(&app_.scenes_.active());
+    if (!expect(setup != nullptr, "the active scene is the board-game setup")) return false;
+    if (setup->humanVsComputer() != againstComputer) click(setupRow(0));
+    if (againstComputer && setup->humanPlaysFirst() != humanFirst) click(setupRow(3));
+    expect(setup->humanVsComputer() == againstComputer && (!againstComputer || setup->humanPlaysFirst() == humanFirst),
+           "clicking the setup rows chooses the mode and side");
+    if (!setupCapture.empty()) captureBoth(setupCapture);
+    click(setupStart);
+    return expectScene(SceneId::BoardGame, "Start Game opens the board");
+}
+
+void SmokeTestDriver::playBoardMove(turn_based::MoveId move, bool keyboard)
+{
+    auto& host = app_.boardGameHost_;
+    auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
+    if (!view) return;
+    int cell = move;
+    if (host.game->key == "numerical_tic_tac_toe") {
+        const int number = numerical_ttt::NumericalGame::numberOf(move);
+        cell = numerical_ttt::NumericalGame::cellOf(move);
+        keyWithText(static_cast<sf::Keyboard::Key>(static_cast<int>(sf::Keyboard::Key::Num0) + number),
+                    static_cast<char32_t>(U'0' + number));
+    }
+    if (!keyboard) {
+        if (const auto center = view->cellCenter(cell)) click(*center);
+        return;
+    }
+    for (int step = 0; step < 24 && view->cursor() != cell; ++step) {
+        const auto from = view->cellCenter(view->cursor()).value_or(sf::Vector2f{});
+        const auto to = view->cellCenter(cell).value_or(sf::Vector2f{});
+        if (to.x > from.x + 1.f) key(sf::Keyboard::Key::Right);
+        else if (to.x < from.x - 1.f) key(sf::Keyboard::Key::Left);
+        else if (to.y > from.y + 1.f) key(sf::Keyboard::Key::Down);
+        else key(sf::Keyboard::Key::Up);
+    }
+    key(sf::Keyboard::Key::Enter);
+}
+
+bool SmokeTestDriver::playBoardGameToEnd(bool keyboard)
+{
+    auto& session = app_.boardGameHost_.session;
+    for (int guard = 0; guard < 400 && !session.game().outcome().finished(); ++guard) {
+        if (session.isComputerTurn()) {
+            wait(0.1f);
+            continue;
+        }
+        const auto moves = session.game().legalMoves();
+        if (moves.empty()) break;
+        const int before = session.game().movesPlayed();
+        playBoardMove(moves.front(), keyboard);
+        if (!expect(session.game().movesPlayed() == before + 1, "each human move reaches the board")) return false;
+    }
+    frames(2);
+    return session.game().outcome().finished();
+}
+
+void SmokeTestDriver::scenarioBoardGames()
+{
+    log_ << "\n[Shared board games]\n";
+    using persistence::GameKey;
+    auto& host = app_.boardGameHost_;
+    const auto active = app_.profileService_->activeProfile();
+    const auto latest = [&]() -> std::optional<persistence::CompletedMatch> {
+        if (!active) return std::nullopt;
+        const auto rows = app_.matchRepository_->recent(active->id, {}, 1, 0);
+        if (rows.empty()) return std::nullopt;
+        return rows.front();
+    };
+    const auto boardScene = [&] { return dynamic_cast<BoardGameScene*>(&app_.scenes_.active()); };
+
+    // SUS against the computer, playing S: mouse play, background computer moves, one recorded row.
+    auto before = historyCount();
+    if (startBoardGame("sus", true, true, "board_setup_sus")) {
+        auto* scene = boardScene();
+        expect(scene != nullptr && host.session.game().movesPlayed() == 0, "the SUS board starts empty");
+        playBoardMove(host.session.game().legalMoves().front(), false);
+        expect(host.session.game().movesPlayed() == 1, "clicking a cell places the human's S");
+        wait(0.1f);
+        expect(scene != nullptr && scene->computerThinking() && host.session.game().movesPlayed() == 1,
+               "the computer searches in the background and waits a moment before moving");
+        wait(0.6f);
+        expect(host.session.game().movesPlayed() == 2, "the computer answers after its short thinking pause");
+        captureBoth("board_sus_in_progress");
+        expect(playBoardGameToEnd(false), "a SUS game against the computer can be played to the end");
+        expect(scene != nullptr && scene->resultVisible(), "the result panel appears when the game ends");
+        captureBoth("board_sus_result");
+        expect(historyCount() == before + 1, "the finished SUS game writes exactly one history row");
+        frames(30);
+        expect(historyCount() == before + 1, "the result panel never writes a second row");
+        const auto row = latest();
+        expect(row && row->game == GameKey::Sus && row->mode == persistence::MatchMode::HumanVsComputer &&
+                   row->difficulty == persistence::DifficultyKey::Standard &&
+                   row->profileSideOrMark == std::optional<std::string>{"S"} && row->profileScore.has_value(),
+               "the SUS row stores the side, the standard computer opponent, and the points");
+        const auto points = host.session.game().scores();
+        const auto winner = host.session.game().outcome().winner;
+        const auto expected = !winner ? persistence::MatchResult::Draw
+            : *winner == turn_based::Seat::First ? persistence::MatchResult::Win : persistence::MatchResult::Loss;
+        expect(row && points && row->profileScore == points->first && row->opponentScore == points->second &&
+                   row->result == expected,
+               "the SUS row stores the human's result and points from the human's side (S)");
+        click(resultButton(3));
+        expectScene(SceneId::GameLibrary, "Return to Library leaves the finished game");
+    }
+
+    // 5x5 as O: the computer opens, then the final board can be studied behind the result panel.
+    before = historyCount();
+    if (startBoardGame("5x5", true, false)) {
+        auto* scene = boardScene();
+        expect(host.session.isComputerTurn(), "playing O, the computer (X) moves first");
+        wait(0.6f);
+        expect(host.session.game().movesPlayed() == 1, "the computer opens the 5x5 game on its own");
+        for (int move = 0; move < 3; ++move) {
+            playBoardMove(host.session.game().legalMoves().front(), false);
+            wait(0.6f);
+        }
+        captureBoth("board_5x5_in_progress");
+        expect(playBoardGameToEnd(false), "a 5x5 game against the computer can be played to the end");
+        expect(host.session.game().movesPlayed() == 24, "5x5 ends after exactly 24 moves");
+        key(sf::Keyboard::Key::Escape);
+        expect(scene != nullptr && scene->reviewingBoard() && !scene->resultVisible(),
+               "Escape on the result panel shows the final board");
+        captureBoth("board_5x5_final_board");
+        key(sf::Keyboard::Key::Enter);
+        expect(scene != nullptr && scene->resultVisible(), "Enter shows the result again");
+        expect(historyCount() == before + 1, "the 5x5 game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::FiveByFiveTicTacToe && row->profileSideOrMark == std::optional<std::string>{"O"} &&
+                   row->profileScore.has_value() && row->opponentScore.has_value(),
+               "the 5x5 row stores the human's O side and both players' three-in-a-row counts");
+        const auto points = host.session.game().scores();
+        const auto winner = host.session.game().outcome().winner;
+        const auto expected = !winner ? persistence::MatchResult::Draw
+            : *winner == turn_based::Seat::Second ? persistence::MatchResult::Win : persistence::MatchResult::Loss;
+        expect(row && points && row->profileScore == points->second && row->opponentScore == points->first &&
+                   row->result == expected,
+               "the 5x5 row stores the human's result and points from the human's side (O, the second seat)");
+        click(resultButton(3));
+        expectScene(SceneId::GameLibrary, "Return to Library leaves the finished 5x5 game");
+    }
+
+    // Misere, two players, keyboard only: rules panel, Tab focus, rematch, and New Setup.
+    before = historyCount();
+    if (startBoardGame("misere", false, true)) {
+        auto* scene = boardScene();
+        using Focus = BoardGameScene::Focus;
+        key(sf::Keyboard::Key::F1);
+        expect(scene != nullptr && scene->rulesVisible(), "F1 opens the rules panel");
+        captureBoth("board_rules_misere");
+        key(sf::Keyboard::Key::Escape);
+        expect(scene != nullptr && !scene->rulesVisible() && activeScene() == SceneId::BoardGame,
+               "Escape closes the rules panel and stays in the game");
+        key(sf::Keyboard::Key::Tab);
+        expect(scene != nullptr && scene->focus() == Focus::Restart, "Tab moves the focus from the board to Restart");
+        key(sf::Keyboard::Key::Tab);
+        key(sf::Keyboard::Key::Enter);
+        expect(scene != nullptr && scene->focus() == Focus::Rules && scene->rulesVisible(),
+               "Enter on the focused Rules button opens the rules");
+        key(sf::Keyboard::Key::Escape);
+        key(sf::Keyboard::Key::Tab);
+        key(sf::Keyboard::Key::Tab);
+        expect(scene != nullptr && scene->focus() == Focus::Board, "Tab cycles through Back to the board");
+        expect(playBoardGameToEnd(true), "a Misere game can be played with the keyboard alone");
+        expect(historyCount() == before + 1, "the finished Misere game is recorded");
+        const auto row = latest();
+        expect(row && row->game == GameKey::MisereTicTacToe && row->mode == persistence::MatchMode::HumanVsHuman &&
+                   !row->profileScore && row->profileSideOrMark == std::optional<std::string>{"X"},
+               "the Misere row stores Player 1 as X without points");
+        click(resultButton(0));
+        expect(host.session.gameNumber() == 2 && host.session.game().movesPlayed() == 0 && scene != nullptr &&
+                   !scene->resultVisible(),
+               "Rematch starts game 2 with the same players");
+        expect(historyCount() == before + 1, "a rematch records nothing until it finishes");
+        expect(playBoardGameToEnd(false), "the rematch can be played to the end");
+        expect(historyCount() == before + 2, "the rematch is recorded as its own game");
+        click(resultButton(2));
+        expectScene(SceneId::BoardGameSetup, "New Setup returns to the same game's setup");
+        key(sf::Keyboard::Key::Escape);
+        expectScene(SceneId::GameLibrary, "Escape leaves the setup for the library");
+    }
+
+    // Numerical, two players: number keys, restart, and leaving an unfinished game unrecorded.
+    before = historyCount();
+    if (startBoardGame("numerical", false, true)) {
+        auto* scene = boardScene();
+        auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
+        const auto& numerical = dynamic_cast<const numerical_ttt::NumericalGame&>(host.session.game());
+        keyWithText(sf::Keyboard::Key::Num5, U'5');
+        if (view) click(view->cellCenter(4).value_or(sf::Vector2f{}));
+        expect(numerical.cell(4) == 5, "a number key chooses the number and a click places it");
+        keyWithText(sf::Keyboard::Key::Num3, U'3');
+        if (view) click(view->cellCenter(0).value_or(sf::Vector2f{}));
+        expect(host.session.game().movesPlayed() == 2 && numerical.cell(0) == 2,
+               "Player 2 cannot choose an odd number, so the preselected 2 is placed");
+        captureBoth("board_numerical_in_progress");
+        key(sf::Keyboard::Key::Escape);
+        expect(scene != nullptr && scene->exitConfirmationVisible(), "Escape during a game asks before leaving");
+        key(sf::Keyboard::Key::Enter);
+        expect(scene != nullptr && !scene->exitConfirmationVisible() && activeScene() == SceneId::BoardGame,
+               "Keep Playing (the default) returns to the game");
+        click(boardRestart);
+        expect(host.session.game().movesPlayed() == 0 && host.session.gameNumber() == 2,
+               "Restart Game clears the board for a new game");
+        playBoardMove(host.session.game().legalMoves().front(), false);
+        click(boardBack);
+        expect(scene != nullptr && scene->exitConfirmationVisible(), "Back to Library also asks first");
+        click(exitLeave);
+        expectScene(SceneId::GameLibrary, "Leave Game returns to the library");
+        expect(historyCount() == before, "restarted and abandoned games write no history");
+    }
+    if (startBoardGame("numerical", false, true)) {
+        expect(playBoardGameToEnd(false), "a Numerical game can be finished with number keys and clicks");
+        expect(historyCount() == before + 1, "the finished Numerical game is recorded");
+        const auto row = latest();
+        expect(row && row->game == GameKey::NumericalTicTacToe && row->profileSideOrMark == std::optional<std::string>{"Odd"} &&
+                   !row->profileScore,
+               "the Numerical row stores Player 1's odd side without points");
+        click(resultButton(3));
+        expectScene(SceneId::GameLibrary, "Return to Library leaves the finished Numerical game");
+    }
     goToMainMenu();
 }

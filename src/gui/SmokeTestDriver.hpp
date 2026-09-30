@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SceneManager.hpp"
+#include "TurnBasedGame.hpp"
 
 #include <SFML/System/Time.hpp>
 #include <SFML/System/Vector2.hpp>
@@ -51,6 +52,16 @@ private:
     void scenarioLibrary();
     void scenarioTicTacToe();
     void scenarioPingPong();
+    void scenarioBoardGames();
+
+    // Shared board games: open one from the library search, choose the mode and side, and start.
+    bool startBoardGame(const std::string& search, bool againstComputer, bool humanFirst,
+                        const std::string& setupCapture = {});
+    // Plays `move` through the board view: a click on its cell (after its number key, for
+    // Numerical), or the arrow keys and Enter when `keyboard` is set.
+    void playBoardMove(turn_based::MoveId move, bool keyboard);
+    // Plays the first legal move for every human turn and waits for the computer, until the game ends.
+    bool playBoardGameToEnd(bool keyboard);
 
     void pumpRealEvents();
 

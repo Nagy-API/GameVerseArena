@@ -15,6 +15,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace {
 int failures = 0;
@@ -301,6 +302,215 @@ void testRecorder(const std::filesystem::path& directory)
     check(seriesRow.matchFormat=="best_of_3" && seriesRow.profileScore==2 && seriesRow.opponentScore==0,
           "best-of-three persists one final session score");
 }
+persistence::CompletedMatch boardMatch(std::int64_t profileId, persistence::GameKey game, persistence::MatchResult result,
+                                       std::int64_t completedAt)
+{
+    const auto sides = persistence::boardGameSides(game).value();
+    persistence::CompletedMatch value;
+    value.profileId = profileId;
+    value.game = game;
+    value.mode = persistence::MatchMode::HumanVsComputer;
+    value.opponentName = "Computer";
+    value.profileDisplayName = "Owner";
+    value.profileSideOrMark = sides.first;
+    value.opponentSideOrMark = sides.second;
+    value.result = result;
+    if (persistence::boardGameRecordsPoints(game)) {
+        value.profileScore = result == persistence::MatchResult::Win ? 3 : 1;
+        value.opponentScore = result == persistence::MatchResult::Loss ? 3 : 1;
+    }
+    value.difficulty = persistence::DifficultyKey::Standard;
+    value.matchFormat = "single";
+    value.durationMs = 500;
+    value.startedAt = completedAt - 100;
+    value.completedAt = completedAt;
+    return value;
+}
+
+void expectRejected(persistence::MatchService& service, const persistence::CompletedMatch& value, const std::string& message)
+{
+    bool rejected = false;
+    try { service.recordCompleted(value); } catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected, message);
+}
+
+void testBoardGameValidation(const std::filesystem::path& directory)
+{
+    using persistence::GameKey;
+    using persistence::MatchResult;
+    persistence::Database database(directory / "board-validation.db");
+    persistence::ProfileService profiles(database); profiles.bootstrap();
+    persistence::MatchService service(database);
+    persistence::MatchRepository history(database);
+    const auto id = profiles.activeProfile()->id;
+
+    std::int64_t completedAt = 1000;
+    int boardGames = 0;
+    for (const auto game : persistence::allGameKeys()) {
+        if (!persistence::boardGameSides(game)) continue;
+        ++boardGames;
+        bool accepted = true;
+        try {
+            service.recordCompleted(boardMatch(id, game, MatchResult::Draw, completedAt++));
+            auto human = boardMatch(id, game, MatchResult::Win, completedAt++);
+            human.mode = persistence::MatchMode::HumanVsHuman;
+            human.difficulty = persistence::DifficultyKey::None;
+            human.opponentName = "Guest";
+            std::swap(human.profileSideOrMark, human.opponentSideOrMark);  // the profile may hold either seat
+            service.recordCompleted(human);
+        } catch (const std::exception&) {
+            accepted = false;
+        }
+        check(accepted, std::string("valid board-game rows are recorded for ") + persistence::toStorage(game));
+    }
+    check(boardGames == 13, "13 board games use the shared single-game rules");
+    check(!persistence::boardGameSides(GameKey::ClassicTicTacToe) && !persistence::boardGameSides(GameKey::PingPong),
+          "Classic Tic-Tac-Toe and Ping Pong keep their own completion rules");
+    check(history.count(id, {}) == 26, "every valid board-game row was stored");
+
+    auto invalid = boardMatch(id, GameKey::Sus, MatchResult::Win, 5000);
+    invalid.profileScore.reset(); invalid.opponentScore.reset();
+    expectRejected(service, invalid, "SUS requires its final points");
+    invalid = boardMatch(id, GameKey::MisereTicTacToe, MatchResult::Win, 5001);
+    invalid.profileScore = 1; invalid.opponentScore = 0;
+    expectRejected(service, invalid, "Misere does not store points");
+    invalid = boardMatch(id, GameKey::FiveByFiveTicTacToe, MatchResult::Win, 5002);
+    invalid.opponentScore = 5;
+    expectRejected(service, invalid, "a 5x5 result that contradicts its points is refused");
+    invalid = boardMatch(id, GameKey::Sus, MatchResult::Win, 5003);
+    invalid.profileScore.reset();
+    expectRejected(service, invalid, "one missing score is refused");
+    invalid = boardMatch(id, GameKey::MisereTicTacToe, MatchResult::Win, 5004);
+    invalid.difficulty = persistence::DifficultyKey::Hard;
+    expectRejected(service, invalid, "a board-game computer opponent must be 'standard'");
+    invalid = boardMatch(id, GameKey::Sus, MatchResult::Win, 5005);
+    invalid.profileSideOrMark = "X"; invalid.opponentSideOrMark = "O";
+    expectRejected(service, invalid, "SUS rows must use the S and U sides");
+    invalid = boardMatch(id, GameKey::NumericalTicTacToe, MatchResult::Win, 5006);
+    invalid.opponentSideOrMark = "Odd";
+    expectRejected(service, invalid, "both players cannot hold the same side");
+    invalid = boardMatch(id, GameKey::WordTicTacToe, MatchResult::Win, 5007);
+    invalid.opponentSideOrMark.reset();
+    expectRejected(service, invalid, "a missing side is refused");
+    invalid = boardMatch(id, GameKey::Diamond, MatchResult::Win, 5008);
+    invalid.matchFormat = "best_of_3";
+    expectRejected(service, invalid, "board games are recorded as single games");
+    invalid = boardMatch(id, GameKey::ObstacleTicTacToe, MatchResult::Draw, 5009);
+    invalid.drawValue = 1;
+    expectRejected(service, invalid, "board games store no draw count");
+    invalid = boardMatch(id, GameKey::Sus, MatchResult::Win, 5012);
+    invalid.profileScore = 5; invalid.opponentScore = 4;
+    expectRejected(service, invalid, "SUS points above the grid's eight lines are refused");
+    invalid = boardMatch(id, GameKey::FiveByFiveTicTacToe, MatchResult::Win, 5013);
+    invalid.profileScore = 30; invalid.opponentScore = 19;
+    expectRejected(service, invalid, "5x5 points above the board's 48 runs are refused");
+    invalid = boardMatch(id, GameKey::Sus, MatchResult::Win, 5014);
+    invalid.profileScore = 2147483647; invalid.opponentScore = 2147483646;
+    expectRejected(service, invalid, "huge point totals are refused without overflowing");
+    auto full = boardMatch(id, GameKey::Sus, MatchResult::Win, 5015);
+    full.profileScore = 5; full.opponentScore = 3;
+    bool accepted = true;
+    try { service.recordCompleted(full); } catch (const std::exception&) { accepted = false; }
+    check(accepted, "a SUS result using all eight lines is accepted");
+
+    auto classic = match(id, GameKey::ClassicTicTacToe, MatchResult::Win, 5010);
+    classic.mode = persistence::MatchMode::HumanVsComputer;
+    classic.difficulty = persistence::DifficultyKey::Standard;
+    expectRejected(service, classic, "Classic Tic-Tac-Toe difficulty must be Easy, Medium, or Hard");
+    auto pong = match(id, GameKey::PingPong, MatchResult::Win, 5011);
+    pong.mode = persistence::MatchMode::HumanVsComputer;
+    pong.difficulty = persistence::DifficultyKey::Standard;
+    expectRejected(service, pong, "Ping Pong difficulty must be Easy, Medium, or Hard");
+    check(history.count(id, {}) == 27, "rejected rows are never stored (only the full SUS result was added)");
+}
+
+void testBoardGameRecorder(const std::filesystem::path& directory)
+{
+    using persistence::GameKey;
+    using persistence::MatchResult;
+    persistence::Database database(directory / "board-recorder.db");
+    persistence::ProfileService profiles(database); profiles.bootstrap();
+    persistence::MatchService matches(database);
+    persistence::MatchRepository history(database);
+    persistence::StatisticsRepository statistics(database);
+    const auto profile = profiles.activeProfile().value();
+
+    auto fakeNow = std::chrono::steady_clock::time_point{};
+    std::int64_t fakeUtc = 8000000000000LL;
+    persistence::MatchRecorder recorder(matches, [&] { return fakeNow; }, [&] { return fakeUtc; });
+    check(!recorder.completeBoardGame(MatchResult::Win, std::nullopt, std::nullopt),
+          "nothing is recorded before a board game begins");
+    bool threw = false;
+    try {
+        recorder.beginBoardGame(profile, GameKey::ClassicTicTacToe, persistence::MatchMode::HumanVsHuman, true, "A", "B");
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    check(threw, "Classic Tic-Tac-Toe cannot be recorded as a shared board game");
+
+    recorder.beginBoardGame(profile, GameKey::Sus, persistence::MatchMode::HumanVsComputer, false, "Ada", "Computer");
+    fakeNow += std::chrono::milliseconds(4200);
+    fakeUtc += 4200;
+    check(recorder.completeBoardGame(MatchResult::Win, 3, 2), "a finished SUS game records");
+    check(!recorder.completeBoardGame(MatchResult::Win, 3, 2) && history.count(profile.id, {}) == 1,
+          "a finished board game is recorded exactly once");
+    auto row = history.recent(profile.id, {}, 1, 0).front();
+    check(row.game == GameKey::Sus && row.profileSideOrMark == "U" && row.opponentSideOrMark == "S" &&
+              row.profileScore == 3 && row.opponentScore == 2 && !row.drawValue,
+          "the profile playing second is stored as U with its points");
+    check(row.difficulty == persistence::DifficultyKey::Standard && row.matchFormat == "single" &&
+              row.profileDisplayName == "Ada" && row.opponentName == "Computer" && row.durationMs == 4200,
+          "mode, difficulty, format, names, and duration are stored");
+
+    recorder.restartBoardGame();
+    fakeNow += std::chrono::milliseconds(1000);
+    check(recorder.completeBoardGame(MatchResult::Loss, 0, 1), "a rematch records a new game");
+    row = history.recent(profile.id, {}, 1, 0).front();
+    check(row.result == MatchResult::Loss && row.durationMs == 1000 && row.profileSideOrMark == "U",
+          "the rematch keeps the sides and restarts the clock");
+
+    recorder.beginBoardGame(profile, GameKey::MisereTicTacToe, persistence::MatchMode::HumanVsHuman, true, "Ada", "Guest");
+    recorder.restartBoardGame();  // Restart mid-game: the abandoned game is never stored.
+    check(recorder.completeBoardGame(MatchResult::Draw, std::nullopt, std::nullopt), "a Misere draw records");
+    row = history.recent(profile.id, {}, 1, 0).front();
+    check(row.game == GameKey::MisereTicTacToe && row.result == MatchResult::Draw && row.profileSideOrMark == "X" &&
+              !row.profileScore && !row.opponentScore && row.difficulty == persistence::DifficultyKey::None,
+          "a human-vs-human Misere draw stores X, no points, and no difficulty");
+    check(history.count(profile.id, {}) == 3, "restarting mid-game stores nothing for the abandoned game");
+
+    recorder.beginBoardGame(profile, GameKey::FiveByFiveTicTacToe, persistence::MatchMode::HumanVsComputer, true, "Ada",
+                            "Computer");
+    recorder.abandon();
+    recorder.restartBoardGame();
+    check(!recorder.completeBoardGame(MatchResult::Win, 4, 1) && history.count(profile.id, {}) == 3,
+          "an abandoned board game is never stored, even after a restart request");
+
+    // Starting another game before the first one ends replaces it: only the second is recorded.
+    recorder.beginBoardGame(profile, GameKey::Sus, persistence::MatchMode::HumanVsComputer, true, "Ada", "Computer");
+    recorder.beginBoardGame(profile, GameKey::MisereTicTacToe, persistence::MatchMode::HumanVsHuman, false, "Ada", "Guest");
+    check(recorder.completeBoardGame(MatchResult::Win, std::nullopt, std::nullopt) && history.count(profile.id, {}) == 4,
+          "a game begun over an unfinished one is recorded once");
+    row = history.recent(profile.id, {}, 1, 0).front();
+    check(row.game == GameKey::MisereTicTacToe && row.profileSideOrMark == "O" && row.opponentName == "Guest" &&
+              row.difficulty == persistence::DifficultyKey::None,
+          "the replacing game's own settings are stored, not the abandoned game's");
+    check(history.count(profile.id, [] { persistence::MatchFilter filter; filter.game = GameKey::Sus; return filter; }()) == 2,
+          "the replaced SUS game was never stored");
+
+    persistence::MatchRecorder failing(matches, [&] { return fakeNow; }, [&] { return fakeUtc; });
+    failing.beginBoardGame(profile, GameKey::FiveByFiveTicTacToe, persistence::MatchMode::HumanVsHuman, true, "Ada",
+                           "Guest");
+    threw = false;
+    try { failing.completeBoardGame(MatchResult::Win, std::nullopt, std::nullopt); }
+    catch (const std::invalid_argument&) { threw = true; }
+    check(threw && !failing.completeBoardGame(MatchResult::Win, 4, 1) && history.count(profile.id, {}) == 4,
+          "a refused completion is not retried into a second write");
+
+    const auto sus = statistics.forGame(profile.id, GameKey::Sus);
+    check(sus.matches == 2 && sus.wins == 1 && sus.losses == 1 && sus.pointsScored == 3 && sus.pointsConceded == 3,
+          "board-game statistics derive from the stored rows");
+    check(statistics.overall(profile.id).matches == 4, "board games count toward overall statistics");
+}
 } // namespace
 
 int main()
@@ -310,6 +520,8 @@ int main()
     testInsertHistoryAndStats(temporary.path);
     testValidation(temporary.path);
     testRecorder(temporary.path);
+    testBoardGameValidation(temporary.path);
+    testBoardGameRecorder(temporary.path);
     if (failures == 0) { std::cout << "Match history tests passed: " << checks << " checks\n"; return 0; }
     std::cerr << failures << " of " << checks << " match-history checks failed\n";
     return 1;
