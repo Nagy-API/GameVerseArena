@@ -15,5 +15,9 @@ std::unique_ptr<BoardView> makeNumericalView();
 std::unique_ptr<BoardView> makeSusView();
 std::unique_ptr<BoardView> makeFiveByFiveView();
 std::unique_ptr<BoardView> makeMisereView();
+std::unique_ptr<BoardView> makeFourInRowView();
+std::unique_ptr<BoardView> makeFourByFourView();
+std::unique_ptr<BoardView> makePyramidView();
+std::unique_ptr<BoardView> makeDiamondView();
 
 } // namespace board_view

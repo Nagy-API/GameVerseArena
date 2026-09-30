@@ -48,24 +48,28 @@ public:
     std::optional<sf::Vector2f> cellCenter(int cell) const;
 
 protected:
-    // `frame` is the board's outer rectangle, drawn behind the cells.
+    // `frame` is the board's outer rectangle, drawn behind the cells; an empty frame draws none
+    // (for boards that are not rectangular).
     void setCells(std::vector<sf::FloatRect> cells, sf::FloatRect frame);
     std::optional<int> cellAt(sf::Vector2f point) const;
     const sf::FloatRect& cellRect(int cell) const { return cells_.at(static_cast<std::size_t>(cell)); }
+    void setCursor(int cell) noexcept { if (cell >= 0 && cell < cellCount()) cursor_ = cell; }
     // Growth of the newest mark, 0.05 to 1 (always 1 with Reduced Motion).
     float placeScale(int cell, const DrawState& state) const noexcept;
     Response chooseCell(const turn_based::TurnBasedGame& game, int cell) const;
 
     // The move that places the current player's piece in `cell`, or nullopt if it cannot be played now.
     virtual std::optional<turn_based::MoveId> moveForCell(const turn_based::TurnBasedGame& game, int cell) const = 0;
-    // The cell a move was played in (to animate it).
-    virtual int cellOfMove(turn_based::MoveId move) const { return move; }
+    // The cell a move was played in (to animate it); `game` already includes the move.
+    virtual int cellOfMove(const turn_based::TurnBasedGame&, turn_based::MoveId move) const { return move; }
+    // Cells lit by the cursor: normally just the cursor cell (a whole column in Four-in-a-Row).
+    virtual bool cursorCovers(int cell, int cursorCell) const { return cell == cursorCell; }
     // Cells to emphasise (winning, losing, or scoring lines).
     virtual bool cellHighlighted(const turn_based::TurnBasedGame&, int) const { return false; }
     virtual sf::Color highlightColor() const;
     virtual void drawCellContent(sf::RenderTarget& target, const turn_based::TurnBasedGame& game, int cell,
                                  const sf::FloatRect& rect, const DrawState& state) const = 0;
-    // A faded preview of the pending move on the cursor cell.
+    // A faded preview of the pending move, called for each cell the cursor covers.
     virtual void drawPreview(sf::RenderTarget&, const turn_based::TurnBasedGame&, int, const sf::FloatRect&,
                              const DrawState&) const {}
     // Drawn above the cells, e.g. lines through completed rows.

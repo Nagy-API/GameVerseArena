@@ -105,7 +105,7 @@ protected:
         return move;
     }
 
-    int cellOfMove(MoveId move) const override { return NumericalGame::cellOf(move); }
+    int cellOfMove(const TurnBasedGame&, MoveId move) const override { return NumericalGame::cellOf(move); }
 
     bool cellHighlighted(const TurnBasedGame& game, int cell) const override
     {

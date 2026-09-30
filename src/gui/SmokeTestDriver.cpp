@@ -5,6 +5,8 @@
 #include "BoardGameScene.hpp"
 #include "BoardGameSetupScene.hpp"
 #include "CellBoardView.hpp"
+#include "DiamondGame.hpp"
+#include "FourByFourGame.hpp"
 #include "GameLibraryScene.hpp"
 #include "NumericalGame.hpp"
 #include "PingPongGameScene.hpp"
@@ -12,6 +14,7 @@
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Mouse.hpp>
 
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -56,6 +59,7 @@ int SmokeTestDriver::run()
     scenarioTicTacToe();
     scenarioPingPong();
     scenarioBoardGames();
+    scenarioMoreBoardGames();
 
     expect(app_.audio_->voiceCount() == AudioEngine::voiceLimit, "the voice pool never grew while sounds played");
     log_ << "\nChecks: " << checks_ << "  Failures: " << failures_ << "  Captures: " << captures_ << '\n';
@@ -556,26 +560,48 @@ void SmokeTestDriver::playBoardMove(turn_based::MoveId move, bool keyboard)
     auto& host = app_.boardGameHost_;
     auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
     if (!view) return;
-    int cell = move;
-    if (host.game->key == "numerical_tic_tac_toe") {
+    // The view cells to choose, in order: usually the move's own cell.
+    std::vector<int> cells{move};
+    const auto& gameKey = host.game->key;
+    if (gameKey == "numerical_tic_tac_toe") {
         const int number = numerical_ttt::NumericalGame::numberOf(move);
-        cell = numerical_ttt::NumericalGame::cellOf(move);
+        cells = {numerical_ttt::NumericalGame::cellOf(move)};
         keyWithText(static_cast<sf::Keyboard::Key>(static_cast<int>(sf::Keyboard::Key::Num0) + number),
                     static_cast<char32_t>(U'0' + number));
+    } else if (gameKey == "four_by_four_tic_tac_toe") {
+        cells = {four_by_four::FourByFourGame::fromOf(move), four_by_four::FourByFourGame::toOf(move)};
+    } else if (gameKey == "diamond") {
+        // Diamond moves are 7 x 7 grid indices; the view numbers only the 25 diamond cells.
+        int viewCell = 0;
+        for (int index = 0; index < move; ++index) {
+            if (diamond::DiamondGame::onBoard(index / 7, index % 7)) ++viewCell;
+        }
+        cells = {viewCell};
     }
-    if (!keyboard) {
-        if (const auto center = view->cellCenter(cell)) click(*center);
-        return;
+    for (const int cell : cells) {
+        if (!keyboard) {
+            if (const auto center = view->cellCenter(cell)) click(*center);
+            continue;
+        }
+        for (int step = 0; step < 24 && view->cursor() != cell; ++step) {
+            const auto from = view->cellCenter(view->cursor()).value_or(sf::Vector2f{});
+            const auto to = view->cellCenter(cell).value_or(sf::Vector2f{});
+            if (to.x > from.x + 1.f) key(sf::Keyboard::Key::Right);
+            else if (to.x < from.x - 1.f) key(sf::Keyboard::Key::Left);
+            else if (to.y > from.y + 1.f) key(sf::Keyboard::Key::Down);
+            else key(sf::Keyboard::Key::Up);
+        }
+        key(sf::Keyboard::Key::Enter);
     }
-    for (int step = 0; step < 24 && view->cursor() != cell; ++step) {
-        const auto from = view->cellCenter(view->cursor()).value_or(sf::Vector2f{});
-        const auto to = view->cellCenter(cell).value_or(sf::Vector2f{});
-        if (to.x > from.x + 1.f) key(sf::Keyboard::Key::Right);
-        else if (to.x < from.x - 1.f) key(sf::Keyboard::Key::Left);
-        else if (to.y > from.y + 1.f) key(sf::Keyboard::Key::Down);
-        else key(sf::Keyboard::Key::Up);
-    }
-    key(sf::Keyboard::Key::Enter);
+}
+
+bool SmokeTestDriver::waitForComputerMove()
+{
+    // The computer searches on a real thread, so wait in real time (frames keep advancing).
+    auto& session = app_.boardGameHost_.session;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (session.isComputerTurn() && std::chrono::steady_clock::now() < deadline) wait(0.05f);
+    return !session.isComputerTurn();
 }
 
 bool SmokeTestDriver::playBoardGameToEnd(bool keyboard)
@@ -583,7 +609,7 @@ bool SmokeTestDriver::playBoardGameToEnd(bool keyboard)
     auto& session = app_.boardGameHost_.session;
     for (int guard = 0; guard < 400 && !session.game().outcome().finished(); ++guard) {
         if (session.isComputerTurn()) {
-            wait(0.1f);
+            if (!expect(waitForComputerMove(), "the computer moves within 30 seconds")) return false;
             continue;
         }
         const auto moves = session.game().legalMoves();
@@ -759,6 +785,109 @@ void SmokeTestDriver::scenarioBoardGames()
                "the Numerical row stores Player 1's odd side without points");
         click(resultButton(3));
         expectScene(SceneId::GameLibrary, "Return to Library leaves the finished Numerical game");
+    }
+    goToMainMenu();
+}
+
+void SmokeTestDriver::scenarioMoreBoardGames()
+{
+    log_ << "\n[More shared board games]\n";
+    using persistence::GameKey;
+    auto& host = app_.boardGameHost_;
+    const auto active = app_.profileService_->activeProfile();
+    const auto latest = [&]() -> std::optional<persistence::CompletedMatch> {
+        if (!active) return std::nullopt;
+        const auto rows = app_.matchRepository_->recent(active->id, {}, 1, 0);
+        if (rows.empty()) return std::nullopt;
+        return rows.front();
+    };
+    const auto boardScene = [&] { return dynamic_cast<BoardGameScene*>(&app_.scenes_.active()); };
+    const auto finishAndReturn = [&](const std::string& name) {
+        auto* scene = boardScene();
+        expect(scene != nullptr && scene->resultVisible(), "the " + name + " result panel appears");
+        click(resultButton(3));
+        expectScene(SceneId::GameLibrary, "Return to Library leaves the finished " + name + " game");
+    };
+
+    // Four-in-a-Row against the computer: clicks on any cell of a column drop a disc there.
+    auto before = historyCount();
+    if (startBoardGame("four", true, true)) {
+        playBoardMove(3, false);
+        expect(host.session.game().movesPlayed() == 1, "clicking a column drops the human's disc");
+        wait(0.1f);
+        auto* scene = boardScene();
+        expect(scene != nullptr && scene->computerThinking(), "the computer searches in the background");
+        expect(waitForComputerMove() && host.session.game().movesPlayed() == 2, "the computer drops its first disc");
+        captureBoth("board_four_in_a_row_in_progress");
+        expect(playBoardGameToEnd(false), "a Four-in-a-Row game against the computer can be played to the end");
+        expect(historyCount() == before + 1, "the finished Four-in-a-Row game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::FourInARow && row->profileSideOrMark == std::optional<std::string>{"X"} &&
+                   !row->profileScore && row->difficulty == persistence::DifficultyKey::Standard,
+               "the Four-in-a-Row row stores the human's X side without points");
+        finishAndReturn("Four-in-a-Row");
+    }
+
+    // 4x4, two players: pick a token, drop the pick with Escape, pick again, and slide to a win.
+    before = historyCount();
+    if (startBoardGame("4x4", false, true)) {
+        auto* scene = boardScene();
+        auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
+        const auto& board = dynamic_cast<const four_by_four::FourByFourGame&>(host.session.game());
+        if (view) click(view->cellCenter(1).value_or(sf::Vector2f{}));
+        captureBoth("board_4x4_token_picked");
+        key(sf::Keyboard::Key::Escape);
+        expect(scene != nullptr && !scene->exitConfirmationVisible() && activeScene() == SceneId::BoardGame,
+               "Escape first drops a picked token instead of leaving");
+        if (view) click(view->cellCenter(5).value_or(sf::Vector2f{}));
+        expect(board.movesPlayed() == 0, "an empty cell does nothing without a picked token");
+        using four_by_four::FourByFourGame;
+        for (const auto move : {FourByFourGame::encode(1, 5), FourByFourGame::encode(13, 9), FourByFourGame::encode(3, 7),
+                                FourByFourGame::encode(9, 13), FourByFourGame::encode(14, 10), FourByFourGame::encode(13, 9),
+                                FourByFourGame::encode(10, 6)}) {
+            playBoardMove(move, false);
+        }
+        expect(board.outcome().winner == turn_based::Seat::First && board.movesPlayed() == 7,
+               "picking tokens and their destinations plays a full 4x4 game to X's win");
+        expect(historyCount() == before + 1, "the finished 4x4 game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::FourByFourTicTacToe && row->result == persistence::MatchResult::Win &&
+                   row->profileSideOrMark == std::optional<std::string>{"X"} && !row->profileScore,
+               "the 4x4 row stores Player 1's win as X without points");
+        finishAndReturn("4x4");
+    }
+
+    // Pyramid against the computer, keyboard only.
+    before = historyCount();
+    if (startBoardGame("pyramid", true, true)) {
+        playBoardMove(host.session.game().legalMoves().back(), true);
+        waitForComputerMove();
+        captureBoth("board_pyramid_in_progress");
+        expect(playBoardGameToEnd(true), "a Pyramid game can be played with the keyboard alone");
+        expect(historyCount() == before + 1, "the finished Pyramid game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::PyramidTicTacToe && row->profileSideOrMark == std::optional<std::string>{"X"},
+               "the Pyramid row stores the human's X side");
+        finishAndReturn("Pyramid");
+    }
+
+    // Diamond as O: the computer opens in the centre.
+    before = historyCount();
+    if (startBoardGame("diamond", true, false)) {
+        waitForComputerMove();
+        const auto& board = dynamic_cast<const diamond::DiamondGame&>(host.session.game());
+        expect(board.cell(3, 3) == diamond::Mark::X, "the computer (X) opens in the centre of the diamond");
+        for (int move = 0; move < 3; ++move) {
+            playBoardMove(host.session.game().legalMoves().front(), false);
+            waitForComputerMove();
+        }
+        captureBoth("board_diamond_in_progress");
+        expect(playBoardGameToEnd(false), "a Diamond game against the computer can be played to the end");
+        expect(historyCount() == before + 1, "the finished Diamond game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::Diamond && row->profileSideOrMark == std::optional<std::string>{"O"},
+               "the Diamond row stores the human's O side");
+        finishAndReturn("Diamond");
     }
     goToMainMenu();
 }

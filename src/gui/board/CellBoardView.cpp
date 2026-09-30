@@ -187,9 +187,9 @@ void CellBoardView::reset(const turn_based::TurnBasedGame&)
     animation_ = 1.f;
 }
 
-void CellBoardView::movePlayed(const turn_based::TurnBasedGame&, turn_based::MoveId move)
+void CellBoardView::movePlayed(const turn_based::TurnBasedGame& game, turn_based::MoveId move)
 {
-    lastCell_ = cellOfMove(move);
+    lastCell_ = cellOfMove(game, move);
     animation_ = 0.f;
 }
 
@@ -237,18 +237,20 @@ Response CellBoardView::chooseCell(const turn_based::TurnBasedGame& game, int ce
 
 void CellBoardView::draw(sf::RenderTarget& target, const turn_based::TurnBasedGame& game, const DrawState& state) const
 {
-    sf::RectangleShape frame(frame_.size);
-    frame.setPosition(frame_.position);
-    frame.setFillColor(Theme::playfield);
-    frame.setOutlineThickness(2.f);
-    frame.setOutlineColor(Theme::border);
-    target.draw(frame);
+    if (frame_.size.x > 0.f && frame_.size.y > 0.f) {
+        sf::RectangleShape frame(frame_.size);
+        frame.setPosition(frame_.position);
+        frame.setFillColor(Theme::playfield);
+        frame.setOutlineThickness(2.f);
+        frame.setOutlineColor(Theme::border);
+        target.draw(frame);
+    }
 
     const float pulse = state.reducedMotion ? 0.5f : 0.5f + 0.5f * std::sin(state.time * 4.f);
     for (int index = 0; index < cellCount(); ++index) {
         const auto& rect = cells_[static_cast<std::size_t>(index)];
         const bool highlighted = cellHighlighted(game, index);
-        const bool cursorHere = state.interactive && index == cursor_;
+        const bool cursorHere = state.interactive && cursorCovers(index, cursor_);
         sf::RectangleShape tile(rect.size);
         tile.setPosition(rect.position);
         tile.setFillColor(highlighted ? highlightColor() : Theme::backgroundRaised);

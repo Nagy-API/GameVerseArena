@@ -1,8 +1,12 @@
 #include "GameCatalogue.hpp"
 
+#include "DiamondGame.hpp"
 #include "FiveByFiveGame.hpp"
+#include "FourByFourGame.hpp"
+#include "FourInRowGame.hpp"
 #include "MisereGame.hpp"
 #include "NumericalGame.hpp"
+#include "PyramidGame.hpp"
 #include "SusGame.hpp"
 
 #include <algorithm>
@@ -101,22 +105,22 @@ std::vector<GameDescriptor> buildCatalogue()
         "Full-depth minimax search, as in the console game: it never completes a line if it can avoid it.",
         "X", "O", 5, "Play Misere", "MISERE_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<four_in_a_row::FourInRowGame>(board(
         "four_in_a_row", "Four-in-a-Row", "6x7 drop", "Drop discs and connect four.",
         "Players drop X and O discs into a grid of 6 rows and 7 columns, X first; a disc falls to the lowest empty "
         "cell of its column. Four in a row horizontally, vertically, or diagonally wins. A full grid is a draw.",
         "The console game's strategy: opens in the center column, takes an immediate win, creates a double "
-        "threat, blocks an immediate win, blocks a double threat, then searches deeper with alpha-beta pruning "
-        "for up to 1.5 seconds.",
-        "X", "O", 6, "Play Four-in-a-Row", "FourInRow_Board"));
+        "threat, blocks an immediate win, blocks a double threat, then searches up to eight moves ahead with "
+        "alpha-beta pruning.",
+        "X", "O", 6, "Play Four-in-a-Row", "FourInRow_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<four_by_four::FourByFourGame>(board(
         "four_by_four_tic_tac_toe", "4x4 Tic-Tac-Toe", "4x4 slide", "Slide your tokens to make three in a row.",
         "Each player starts with four tokens: the top row reads O X O X and the bottom row X O X O. X moves first. "
         "On your turn, slide one of your tokens one cell up, down, left, or right into an empty cell. Three of your "
-        "tokens in a row, column, or diagonal win.",
+        "tokens in a row, column, or diagonal win. If the player to move cannot slide any token, the game is a draw.",
         "Three-move minimax lookahead with the console game's line evaluation.",
-        "X", "O", 7, "Play 4x4 Tic-Tac-Toe", "T4x4_Board"));
+        "X", "O", 7, "Play 4x4 Tic-Tac-Toe", "T4x4_Board")));
 
     games.push_back(board(
         "word_tic_tac_toe", "Word Tic-Tac-Toe", "3x3 letters", "Complete a three-letter word to win.",
@@ -127,23 +131,23 @@ std::vector<GameDescriptor> buildCatalogue()
         "center, then in a corner, then in any free cell.",
         "Any letter", "Any letter", 8, "Play Word Tic-Tac-Toe", "Word_Tic_Tac_Toe_Board"));
 
-    games.push_back(board(
+    games.push_back(playable<pyramid::PyramidGame>(board(
         "pyramid_tic_tac_toe", "Pyramid Tic-Tac-Toe", "pyramid", "Three in a line on a nine-cell pyramid.",
         "The board is a pyramid of 5, 3, and 1 cells. X and O alternate, X first. Three marks in a line win: along "
         "the bottom row (three possible lines), across the middle row, straight up the center, or along either "
         "sloped edge. A full pyramid without a line is a draw.",
         "The console game's strategy: win if possible, otherwise block, otherwise take the first free cell from "
         "the bottom row up.",
-        "X", "O", 9, "Play Pyramid Tic-Tac-Toe", "PyramidBoard"));
+        "X", "O", 9, "Play Pyramid Tic-Tac-Toe", "PyramidBoard")));
 
-    games.push_back(board(
+    games.push_back(playable<diamond::DiamondGame>(board(
         "diamond", "Diamond", "diamond", "Make a line of three and a line of four at once.",
         "X and O alternate on a diamond-shaped board of 25 cells, X first. You win by holding a line of exactly "
         "three and a line of exactly four of your marks at the same time, in different directions (horizontal, "
         "vertical, or either diagonal); the two lines may share a cell. A full board without a winner is a draw.",
         "The console game's strategy: win if possible, block the opponent's winning cell, otherwise choose the "
         "cell that most strengthens its own lines, preferring the center.",
-        "X", "O", 10, "Play Diamond", "DIAMOND_Board"));
+        "X", "O", 10, "Play Diamond", "DIAMOND_Board")));
 
     games.push_back(board(
         "infinity_xo", "Infinity XO", "3x3", "The oldest mark vanishes as you play.",

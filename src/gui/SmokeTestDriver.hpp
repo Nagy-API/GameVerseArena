@@ -53,6 +53,7 @@ private:
     void scenarioTicTacToe();
     void scenarioPingPong();
     void scenarioBoardGames();
+    void scenarioMoreBoardGames();
 
     // Shared board games: open one from the library search, choose the mode and side, and start.
     bool startBoardGame(const std::string& search, bool againstComputer, bool humanFirst,
@@ -62,6 +63,8 @@ private:
     void playBoardMove(turn_based::MoveId move, bool keyboard);
     // Plays the first legal move for every human turn and waits for the computer, until the game ends.
     bool playBoardGameToEnd(bool keyboard);
+    // Waits (in real time, while frames advance) until it is no longer the computer's turn.
+    bool waitForComputerMove();
 
     void pumpRealEvents();
 

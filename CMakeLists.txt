@@ -169,6 +169,10 @@ add_library(GameVerseArenaBoardGames
     "src/games/sus/SusGame.cpp"
     "src/games/five_by_five/FiveByFiveGame.cpp"
     "src/games/misere/MisereGame.cpp"
+    "src/games/four_in_a_row/FourInRowGame.cpp"
+    "src/games/four_by_four/FourByFourGame.cpp"
+    "src/games/pyramid/PyramidGame.cpp"
+    "src/games/diamond/DiamondGame.cpp"
 )
 target_include_directories(GameVerseArenaBoardGames PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/common"
@@ -176,6 +180,10 @@ target_include_directories(GameVerseArenaBoardGames PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/sus"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/five_by_five"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/misere"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/four_in_a_row"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/four_by_four"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/pyramid"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/diamond"
 )
 target_compile_features(GameVerseArenaBoardGames PUBLIC cxx_std_17)
 target_link_libraries(GameVerseArenaBoardGames PUBLIC Threads::Threads)
@@ -219,6 +227,10 @@ gva_board_game_test(NumericalGameTests)
 gva_board_game_test(SusGameTests)
 gva_board_game_test(FiveByFiveGameTests)
 gva_board_game_test(MisereGameTests)
+gva_board_game_test(FourInRowGameTests)
+gva_board_game_test(FourByFourGameTests)
+gva_board_game_test(PyramidGameTests)
+gva_board_game_test(DiamondGameTests)
 
 add_executable(GameVerseArenaTests
     "tests/TicTacToeTests.cpp"
@@ -347,6 +359,10 @@ add_executable(GameVerseArenaGUI
     "src/gui/board/SusBoardView.cpp"
     "src/gui/board/FiveByFiveBoardView.cpp"
     "src/gui/board/MisereBoardView.cpp"
+    "src/gui/board/FourInRowBoardView.cpp"
+    "src/gui/board/FourByFourBoardView.cpp"
+    "src/gui/board/PyramidBoardView.cpp"
+    "src/gui/board/DiamondBoardView.cpp"
     "src/gui/ProfilesScene.cpp"
     "src/gui/ProfileStatsScene.cpp"
     "src/gui/ProfileAchievementsScene.cpp"

@@ -5,7 +5,7 @@ GameVerseArena is a C++17 games platform with two independently buildable applic
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
 - `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history, derived statistics and achievements, persistent audio and accessibility settings, procedural sound effects, a game library, graphical versions of the original board games (Classic Tic-Tac-Toe plus the games listed under [Board games in the GUI](#board-games-in-the-gui)), and real-time Ping Pong.
 
-Classic Tic-Tac-Toe, Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, and Ping Pong are playable in the GUI. The other 9 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
+Classic Tic-Tac-Toe, Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, Four-in-a-Row, 4x4 Tic-Tac-Toe, Pyramid Tic-Tac-Toe, Diamond, and Ping Pong are playable in the GUI. The other 5 original board games remain playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
 ## Games
 
@@ -61,6 +61,10 @@ cmake --build build --config Release --target GameVerseArenaNumericalGameTests
 cmake --build build --config Release --target GameVerseArenaSusGameTests
 cmake --build build --config Release --target GameVerseArenaFiveByFiveGameTests
 cmake --build build --config Release --target GameVerseArenaMisereGameTests
+cmake --build build --config Release --target GameVerseArenaFourInRowGameTests
+cmake --build build --config Release --target GameVerseArenaFourByFourGameTests
+cmake --build build --config Release --target GameVerseArenaPyramidGameTests
+cmake --build build --config Release --target GameVerseArenaDiamondGameTests
 ctest --test-dir build --output-on-failure
 ```
 
@@ -225,14 +229,14 @@ The active profile provides Player 1's initial setup name. Match-specific displa
 
 ## Board games in the GUI
 
-Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, and Misere Tic-Tac-Toe are played in shared board-game scenes. Choose one in the library to open its setup:
+Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, Four-in-a-Row, 4x4 Tic-Tac-Toe, Pyramid Tic-Tac-Toe, and Diamond are played in shared board-game scenes. Choose one in the library to open its setup:
 
 - **Game mode**: Human vs Human or Human vs Computer.
 - **Player names**: Player 1 starts as the active profile's name; both names can be edited for this game only.
 - **Your side** (against the computer): play the side that moves first or the side that moves second. In Human vs Human play, Player 1 always takes the side that moves first.
 - The right-hand panel shows the game's rules and describes its computer opponent.
 
-During a game, the side panels show each player's side, name, points (SUS and 5x5), and whose turn it is, and the line under the board says what to do next. Move the cell cursor with the arrow keys and play with Enter or Space, or click a cell. In Numerical Tic-Tac-Toe, choose a number with the number keys or the tray under the board (the lowest unused number is preselected each turn) and then place it. Tab moves the focus to **Restart Game**, **Rules**, and **Back to Library**; F1 opens the rules. Escape or **Back to Library** asks for confirmation before discarding a game in progress. The computer searches on a background thread, so the window stays responsive, and it waits at least 0.35 seconds before moving.
+During a game, the side panels show each player's side, name, points (SUS and 5x5), and whose turn it is, and the line under the board says what to do next. Move the cell cursor with the arrow keys and play with Enter or Space, or click a cell. In Numerical Tic-Tac-Toe, choose a number with the number keys or the tray under the board (the lowest unused number is preselected each turn) and then place it. In Four-in-a-Row, Left and Right choose a column (the preview shows where the disc will land) and a click anywhere in a column drops a disc there. In 4x4 Tic-Tac-Toe, first pick one of your tokens (its possible destinations are marked), then pick the empty cell to slide it to; picking another of your tokens switches, and Escape drops the pick. Tab moves the focus to **Restart Game**, **Rules**, and **Back to Library**; F1 opens the rules. Escape or **Back to Library** asks for confirmation before discarding a game in progress. The computer searches on a background thread, so the window stays responsive, and it waits at least 0.35 seconds before moving.
 
 When a game ends, the result panel names the winner and the reason and shows the final points where the game has them. **Rematch** starts the next game with the same players, **View Final Board** (or Escape) hides the panel so the finished board can be studied, **New Setup** returns to the setup, and **Return to Library** leaves. Restarting a game in progress discards it without recording it.
 
@@ -240,6 +244,9 @@ The graphical versions keep the console games' rules and computer strategies, wi
 
 - Numerical Tic-Tac-Toe credits the player whose placement completes a 15-line, as the console game's result message does; the console scoreboard credits Player 1 for every Numerical win because its result check does not know who moved last.
 - The 5x5 computer looks for a cell that makes a *new* three-in-a-row for itself, then for one that would give the opponent a new one (to block it). The console version tested whole-board totals instead: once the computer held any three it always took the first free cell, and once the opponent held any three it stopped blocking and took the first free cell whenever it had no new three of its own to make.
+- The Four-in-a-Row computer searches the same depths (4, 6, then 8 moves ahead) with the console's evaluation and move order, but stops after examining 400,000 positions instead of after 1.5 seconds, so it plays the same way on every computer; that budget lets the depth-8 search finish in practically every position. It also has no transposition cache (the console's reused scores from different depths and search windows), and it only counts a completed four for the player who dropped the last disc (the console could report a false win for the other player). Because of that false win the console's search scored blocking a line of three as a loss, so in most positions its deeper search decides, the graphical computer chooses a different column than the console would.
+- 4x4 Tic-Tac-Toe ends in a draw when the player to move cannot slide any token; the console game never handled that position.
+- Diamond checks every line of three and four when deciding a win. The console's check remembered only the first line of three and the first line of four it found, so it could miss a valid pair when those two ran in the same direction.
 
 ## Ping Pong in the GUI
 
