@@ -44,6 +44,7 @@ public:
     bool exitConfirmationVisible() const noexcept { return exitConfirmation_; }
     bool rulesVisible() const noexcept { return rulesOverlay_.visible(); }
     bool computerThinking() const noexcept { return computer_.running(); }
+    const std::string& notice() const noexcept { return notice_; }
     Focus focus() const noexcept { return focus_; }
 
 private:
@@ -90,6 +91,8 @@ private:
     float computerElapsed_{};
     bool computerStuck_{false};
     std::string errorMessage_;
+    std::string notice_;      // a board view's short explanation, shown for a moment
+    float noticeLeft_{0.f};
     Focus focus_{Focus::Board};
     bool exitConfirmation_{false};
     bool exitYesSelected_{false};

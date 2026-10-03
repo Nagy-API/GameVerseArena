@@ -16,6 +16,10 @@ std::unique_ptr<BoardView> createBoardView(const std::string& gameKey)
         {"four_by_four_tic_tac_toe", &makeFourByFourView},
         {"pyramid_tic_tac_toe", &makePyramidView},
         {"diamond", &makeDiamondView},
+        {"word_tic_tac_toe", &makeWordView},
+        {"infinity_xo", &makeInfinityView},
+        {"memory_xo", &makeMemoryView},
+        {"obstacle_tic_tac_toe", &makeObstacleView},
     };
     const auto found = makers.find(gameKey);
     return found == makers.end() ? nullptr : found->second();

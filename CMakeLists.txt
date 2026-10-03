@@ -173,6 +173,10 @@ add_library(GameVerseArenaBoardGames
     "src/games/four_by_four/FourByFourGame.cpp"
     "src/games/pyramid/PyramidGame.cpp"
     "src/games/diamond/DiamondGame.cpp"
+    "src/games/word/WordGame.cpp"
+    "src/games/infinity/InfinityGame.cpp"
+    "src/games/memory/MemoryGame.cpp"
+    "src/games/obstacle/ObstacleGame.cpp"
 )
 target_include_directories(GameVerseArenaBoardGames PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/common"
@@ -184,6 +188,10 @@ target_include_directories(GameVerseArenaBoardGames PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/four_by_four"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/pyramid"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/diamond"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/word"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/infinity"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/memory"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/obstacle"
 )
 target_compile_features(GameVerseArenaBoardGames PUBLIC cxx_std_17)
 target_link_libraries(GameVerseArenaBoardGames PUBLIC Threads::Threads)
@@ -231,6 +239,13 @@ gva_board_game_test(FourInRowGameTests)
 gva_board_game_test(FourByFourGameTests)
 gva_board_game_test(PyramidGameTests)
 gva_board_game_test(DiamondGameTests)
+gva_board_game_test(WordGameTests)
+# The built-in Word dictionary must stay identical to the console's dic.txt.
+target_compile_definitions(GameVerseArenaWordGameTests PRIVATE
+    GVA_WORD_DICTIONARY_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/dic.txt")
+gva_board_game_test(InfinityGameTests)
+gva_board_game_test(MemoryGameTests)
+gva_board_game_test(ObstacleGameTests)
 
 add_executable(GameVerseArenaTests
     "tests/TicTacToeTests.cpp"
@@ -363,6 +378,10 @@ add_executable(GameVerseArenaGUI
     "src/gui/board/FourByFourBoardView.cpp"
     "src/gui/board/PyramidBoardView.cpp"
     "src/gui/board/DiamondBoardView.cpp"
+    "src/gui/board/WordBoardView.cpp"
+    "src/gui/board/InfinityBoardView.cpp"
+    "src/gui/board/MemoryBoardView.cpp"
+    "src/gui/board/ObstacleBoardView.cpp"
     "src/gui/ProfilesScene.cpp"
     "src/gui/ProfileStatsScene.cpp"
     "src/gui/ProfileAchievementsScene.cpp"

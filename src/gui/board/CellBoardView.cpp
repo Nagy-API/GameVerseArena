@@ -231,8 +231,8 @@ Response CellBoardView::activate(const turn_based::TurnBasedGame& game, bool int
 
 Response CellBoardView::chooseCell(const turn_based::TurnBasedGame& game, int cell) const
 {
-    if (const auto move = moveForCell(game, cell)) return {move, Response::Feedback::None};
-    return {std::nullopt, Response::Feedback::Invalid};
+    if (const auto move = moveForCell(game, cell)) return {move, Response::Feedback::None, {}};
+    return {std::nullopt, Response::Feedback::Invalid, refusal(game, cell)};
 }
 
 void CellBoardView::draw(sf::RenderTarget& target, const turn_based::TurnBasedGame& game, const DrawState& state) const

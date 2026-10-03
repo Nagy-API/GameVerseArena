@@ -9,6 +9,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 
 // Presentation and input for one graphical board game. A view draws the game's board inside the
 // area the shared board-game scene gives it and turns pointer and keyboard input into complete
@@ -19,8 +20,15 @@ namespace board_view {
 struct Response {
     enum class Feedback { None, Focus, Select, Invalid };
 
+    Response() = default;
+    Response(std::optional<turn_based::MoveId> chosen, Feedback sound, std::string note = {})
+        : move(chosen), feedback(sound), message(std::move(note))
+    {
+    }
+
     std::optional<turn_based::MoveId> move;  // a complete move the player chose
     Feedback feedback{Feedback::None};
+    std::string message;  // shown briefly under the board, e.g. why a choice was refused
 };
 
 struct DrawState {

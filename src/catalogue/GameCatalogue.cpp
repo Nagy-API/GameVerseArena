@@ -4,10 +4,14 @@
 #include "FiveByFiveGame.hpp"
 #include "FourByFourGame.hpp"
 #include "FourInRowGame.hpp"
+#include "InfinityGame.hpp"
+#include "MemoryGame.hpp"
 #include "MisereGame.hpp"
 #include "NumericalGame.hpp"
+#include "ObstacleGame.hpp"
 #include "PyramidGame.hpp"
 #include "SusGame.hpp"
+#include "WordGame.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -53,6 +57,31 @@ GameDescriptor playable(GameDescriptor game)
     game.launch = LaunchKind::BoardGame;
     game.createGame = [](std::uint32_t) -> std::unique_ptr<turn_based::TurnBasedGame> { return std::make_unique<Game>(); };
     return game;
+}
+
+// The same, for a game that uses randomness of its own (seeded per game).
+template <typename Game>
+GameDescriptor playableSeeded(GameDescriptor game)
+{
+    game.launch = LaunchKind::BoardGame;
+    game.createGame = [](std::uint32_t seed) -> std::unique_ptr<turn_based::TurnBasedGame> {
+        return std::make_unique<Game>(seed);
+    };
+    return game;
+}
+
+// "A, B, and C" from the Word dictionary, in alphabetical order.
+std::string wordList()
+{
+    std::string text;
+    const auto& words = word_ttt::WordGame::dictionary();
+    std::size_t index = 0;
+    for (const auto& word : words) {
+        if (index > 0) text += index + 1 == words.size() ? ", and " : ", ";
+        text += word;
+        ++index;
+    }
+    return text;
 }
 
 std::vector<GameDescriptor> buildCatalogue()
@@ -122,14 +151,15 @@ std::vector<GameDescriptor> buildCatalogue()
         "Three-move minimax lookahead with the console game's line evaluation.",
         "X", "O", 7, "Play 4x4 Tic-Tac-Toe", "T4x4_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<word_ttt::WordGame>(board(
         "word_tic_tac_toe", "Word Tic-Tac-Toe", "3x3 letters", "Complete a three-letter word to win.",
         "Players take turns writing any letter A-Z in an empty cell of a 3x3 grid. Whoever completes a valid "
         "three-letter word, read left to right along a row, top to bottom along a column, or downward along a "
-        "diagonal, wins. Words come from the bundled dictionary file dic.txt. Nine letters without a word is a draw.",
+        "diagonal, wins. Nine letters without a word is a draw. The valid words are the console game's dictionary "
+        "(dic.txt): " + wordList() + ".",
         "The console game's strategy: plays a winning letter when one exists; otherwise a random letter in the "
-        "center, then in a corner, then in any free cell.",
-        "Any letter", "Any letter", 8, "Play Word Tic-Tac-Toe", "Word_Tic_Tac_Toe_Board"));
+        "center, then in a corner, then in any free cell. It never blocks.",
+        "Any letter", "Any letter", 8, "Play Word Tic-Tac-Toe", "Word_Tic_Tac_Toe_Board")));
 
     games.push_back(playable<pyramid::PyramidGame>(board(
         "pyramid_tic_tac_toe", "Pyramid Tic-Tac-Toe", "pyramid", "Three in a line on a nine-cell pyramid.",
@@ -149,13 +179,13 @@ std::vector<GameDescriptor> buildCatalogue()
         "cell that most strengthens its own lines, preferring the center.",
         "X", "O", 10, "Play Diamond", "DIAMOND_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<infinity_xo::InfinityGame>(board(
         "infinity_xo", "Infinity XO", "3x3", "The oldest mark vanishes as you play.",
         "X and O alternate on a 3x3 grid, X first. After the 6th move the oldest mark on the board disappears, and "
         "after the 9th move the next-oldest disappears too. Three in a row wins. If the 9th move does not win, the "
         "game is a draw.",
         "Plays a random legal move, as the console game does.",
-        "X", "O", 11, "Play Infinity XO", "Infinity_XO_Board"));
+        "X", "O", 11, "Play Infinity XO", "Infinity_XO_Board")));
 
     games.push_back(board(
         "ultimate_xo", "Ultimate XO", "9 boards", "Win small boards to claim the big board.",
@@ -167,20 +197,21 @@ std::vector<GameDescriptor> buildCatalogue()
         "Alpha-beta minimax four moves deep with the console game's board evaluation.",
         "X", "O", 12, "Play Ultimate XO", "UltimateTTT_Board"));
 
-    games.push_back(board(
+    games.push_back(playable<memory_xo::MemoryGame>(board(
         "memory_xo", "Memory XO", "3x3 hidden", "Every mark is hidden, so remember where they are.",
-        "X and O alternate on a 3x3 grid, X first, but each mark is hidden as soon as it is placed. Choosing a cell "
-        "that is already taken is refused and you must choose again. Three in a row wins. Nine marks without a "
-        "line is a draw.",
+        "X and O alternate on a 3x3 grid, X first, but every mark disappears from view a moment after it is "
+        "placed. Choosing a cell that is already taken is refused and you must choose again. Three in a row wins. "
+        "Nine marks without a line is a draw. The board is revealed when the game ends.",
         "The console game's strategy: it always takes the first free cell, reading the hidden board.",
-        "X", "O", 13, "Play Memory XO", "Memory_XO_Board"));
+        "X", "O", 13, "Play Memory XO", "Memory_XO_Board")));
 
-    games.push_back(board(
+    games.push_back(playableSeeded<obstacle::ObstacleGame>(board(
         "obstacle_tic_tac_toe", "Obstacle Tic-Tac-Toe", "6x6", "Four in a row while obstacles appear.",
         "X and O alternate on a 6x6 grid, X first. After every second move, two obstacles appear on random empty "
-        "cells and can never be used. Four in a row horizontally, vertically, or diagonally wins.",
+        "cells and can never be used. Four in a row horizontally, vertically, or diagonally wins. If no empty "
+        "cell is left, the game is a draw.",
         "Plays a random legal move, as the console game does.",
-        "X", "O", 14, "Play Obstacle", "Obstacle_Board"));
+        "X", "O", 14, "Play Obstacle", "Obstacle_Board")));
 
     GameDescriptor pong;
     pong.key = "ping_pong";

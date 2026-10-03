@@ -64,6 +64,8 @@ protected:
     virtual int cellOfMove(const turn_based::TurnBasedGame&, turn_based::MoveId move) const { return move; }
     // Cells lit by the cursor: normally just the cursor cell (a whole column in Four-in-a-Row).
     virtual bool cursorCovers(int cell, int cursorCell) const { return cell == cursorCell; }
+    // A short explanation when choosing `cell` cannot make a move (empty: just the error sound).
+    virtual std::string refusal(const turn_based::TurnBasedGame&, int) const { return {}; }
     // Cells to emphasise (winning, losing, or scoring lines).
     virtual bool cellHighlighted(const turn_based::TurnBasedGame&, int) const { return false; }
     virtual sf::Color highlightColor() const;

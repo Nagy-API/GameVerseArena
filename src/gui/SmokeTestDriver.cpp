@@ -8,7 +8,11 @@
 #include "DiamondGame.hpp"
 #include "FourByFourGame.hpp"
 #include "GameLibraryScene.hpp"
+#include "InfinityGame.hpp"
+#include "MemoryGame.hpp"
 #include "NumericalGame.hpp"
+#include "ObstacleGame.hpp"
+#include "WordGame.hpp"
 #include "PingPongGameScene.hpp"
 
 #include <SFML/Window/Event.hpp>
@@ -60,6 +64,7 @@ int SmokeTestDriver::run()
     scenarioPingPong();
     scenarioBoardGames();
     scenarioMoreBoardGames();
+    scenarioSpecialRuleBoardGames();
 
     expect(app_.audio_->voiceCount() == AudioEngine::voiceLimit, "the voice pool never grew while sounds played");
     log_ << "\nChecks: " << checks_ << "  Failures: " << failures_ << "  Captures: " << captures_ << '\n';
@@ -568,6 +573,11 @@ void SmokeTestDriver::playBoardMove(turn_based::MoveId move, bool keyboard)
         cells = {numerical_ttt::NumericalGame::cellOf(move)};
         keyWithText(static_cast<sf::Keyboard::Key>(static_cast<int>(sf::Keyboard::Key::Num0) + number),
                     static_cast<char32_t>(U'0' + number));
+    } else if (gameKey == "word_tic_tac_toe") {
+        const char letter = word_ttt::WordGame::letterOf(move);
+        cells = {word_ttt::WordGame::cellOf(move)};
+        keyWithText(static_cast<sf::Keyboard::Key>(static_cast<int>(sf::Keyboard::Key::A) + (letter - 'A')),
+                    static_cast<char32_t>(letter));
     } else if (gameKey == "four_by_four_tic_tac_toe") {
         cells = {four_by_four::FourByFourGame::fromOf(move), four_by_four::FourByFourGame::toOf(move)};
     } else if (gameKey == "diamond") {
@@ -888,6 +898,118 @@ void SmokeTestDriver::scenarioMoreBoardGames()
         expect(row && row->game == GameKey::Diamond && row->profileSideOrMark == std::optional<std::string>{"O"},
                "the Diamond row stores the human's O side");
         finishAndReturn("Diamond");
+    }
+    goToMainMenu();
+}
+
+void SmokeTestDriver::scenarioSpecialRuleBoardGames()
+{
+    log_ << "\n[Word, Infinity, Memory, and Obstacle]\n";
+    using persistence::GameKey;
+    auto& host = app_.boardGameHost_;
+    const auto active = app_.profileService_->activeProfile();
+    const auto latest = [&]() -> std::optional<persistence::CompletedMatch> {
+        if (!active) return std::nullopt;
+        const auto rows = app_.matchRepository_->recent(active->id, {}, 1, 0);
+        if (rows.empty()) return std::nullopt;
+        return rows.front();
+    };
+    const auto boardScene = [&] { return dynamic_cast<BoardGameScene*>(&app_.scenes_.active()); };
+    const auto finishAndReturn = [&](const std::string& name) {
+        auto* scene = boardScene();
+        expect(scene != nullptr && scene->resultVisible(), "the " + name + " result panel appears");
+        click(resultButton(3));
+        expectScene(SceneId::GameLibrary, "Return to Library leaves the finished " + name + " game");
+    };
+
+    // Word, two players: a cell needs a letter first; then C-A-T across the top row wins.
+    auto before = historyCount();
+    if (startBoardGame("word", false, true)) {
+        auto* scene = boardScene();
+        auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
+        if (view) click(view->cellCenter(0).value_or(sf::Vector2f{}));
+        expect(host.session.game().movesPlayed() == 0 && scene != nullptr && !scene->notice().empty(),
+               "choosing a cell before a letter explains that a letter comes first");
+        using word_ttt::WordGame;
+        playBoardMove(WordGame::encode(0, 'C'), false);
+        playBoardMove(WordGame::encode(8, 'Q'), false);
+        playBoardMove(WordGame::encode(1, 'A'), true);
+        captureBoth("board_word_in_progress");
+        playBoardMove(WordGame::encode(7, 'Z'), false);
+        playBoardMove(WordGame::encode(2, 'T'), false);
+        const auto& word = dynamic_cast<const WordGame&>(host.session.game());
+        expect(word.outcome().winner == turn_based::Seat::First && word.winningWord() == "CAT",
+               "typed letters and clicked cells spell CAT for Player 1's win");
+        expect(historyCount() == before + 1, "the finished Word game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::WordTicTacToe && row->profileSideOrMark == std::optional<std::string>{"First"} &&
+                   row->result == persistence::MatchResult::Win && !row->profileScore,
+               "the Word row stores Player 1's win on the first seat without points");
+        finishAndReturn("Word");
+    }
+
+    // Infinity against the computer: marks vanish after moves 6 and 9.
+    before = historyCount();
+    if (startBoardGame("infinity", true, true)) {
+        for (int move = 0; move < 3 && !host.session.game().outcome().finished(); ++move) {
+            playBoardMove(host.session.game().legalMoves().front(), false);
+            waitForComputerMove();
+        }
+        captureBoth("board_infinity_in_progress");
+        expect(playBoardGameToEnd(false), "an Infinity game against the computer ends by its ninth move");
+        expect(host.session.game().movesPlayed() <= infinity_xo::InfinityGame::finalMove,
+               "Infinity never runs past nine moves");
+        expect(historyCount() == before + 1, "the finished Infinity game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::InfinityXo && row->profileSideOrMark == std::optional<std::string>{"X"},
+               "the Infinity row stores the human's X side");
+        finishAndReturn("Infinity");
+    }
+
+    // Memory, two players: a taken cell is refused (with a message), the board is revealed at the end.
+    before = historyCount();
+    if (startBoardGame("memory", false, true)) {
+        auto* scene = boardScene();
+        auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
+        playBoardMove(0, false);
+        playBoardMove(3, false);
+        if (view) click(view->cellCenter(0).value_or(sf::Vector2f{}));
+        expect(host.session.game().movesPlayed() == 2 && scene != nullptr &&
+                   scene->notice().find("already taken") != std::string::npos,
+               "choosing a hidden taken cell is refused with an explanation");
+        wait(1.5f);
+        captureBoth("board_memory_hidden");
+        for (const int cell : {1, 4, 2}) playBoardMove(cell, false);
+        expect(host.session.game().outcome().winner == turn_based::Seat::First, "three hidden X marks in a row win");
+        key(sf::Keyboard::Key::Escape);
+        expect(scene != nullptr && scene->reviewingBoard(), "the finished board can be studied");
+        captureBoth("board_memory_revealed");
+        key(sf::Keyboard::Key::Enter);
+        expect(historyCount() == before + 1, "the finished Memory game is recorded once");
+        finishAndReturn("Memory");
+    }
+
+    // Obstacle against the computer: obstacles appear after every second move.
+    before = historyCount();
+    if (startBoardGame("obstacle", true, true)) {
+        playBoardMove(host.session.game().legalMoves().front(), false);
+        waitForComputerMove();
+        const auto& board = dynamic_cast<const obstacle::ObstacleGame&>(host.session.game());
+        int blocked = 0;
+        for (int cell = 0; cell < 36; ++cell) {
+            if (board.cell(cell) == obstacle::Cell::Blocked) ++blocked;
+        }
+        expect(blocked == 2, "two obstacles appear after the first two moves");
+        playBoardMove(host.session.game().legalMoves().back(), false);
+        waitForComputerMove();
+        wait(0.5f);
+        captureBoth("board_obstacle_in_progress");
+        expect(playBoardGameToEnd(false), "an Obstacle game against the computer can be played to the end");
+        expect(historyCount() == before + 1, "the finished Obstacle game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::ObstacleTicTacToe && row->profileSideOrMark == std::optional<std::string>{"X"},
+               "the Obstacle row stores the human's X side");
+        finishAndReturn("Obstacle");
     }
     goToMainMenu();
 }

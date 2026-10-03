@@ -3,6 +3,7 @@
 // XO_Demo.cpp itself) plus Ping Pong.
 #include "GameCatalogue.hpp"
 #include "MatchTypes.hpp"
+#include "ObstacleGame.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -174,6 +175,19 @@ void testEveryPlayableGameCanStart()
         const bool storesPoints = persistence::boardGameRecordsPoints(persistence::gameKeyFromStorage(game.key));
         check(instance->scores().has_value() == storesPoints,
               game.displayName + " reports points exactly when its history stores them");
+    }
+    // Obstacle Tic-Tac-Toe draws its obstacles from the game seed, so the factory must pass it on.
+    if (const auto* obstacleGame = catalogue::find("obstacle_tic_tac_toe"); obstacleGame && obstacleGame->createGame) {
+        std::set<std::vector<int>> patterns;
+        for (std::uint32_t seed = 1; seed <= 10; ++seed) {
+            auto game = obstacleGame->createGame(seed);
+            game->play(0);
+            game->play(35);
+            if (const auto* typed = dynamic_cast<const obstacle::ObstacleGame*>(game.get())) {
+                patterns.insert(typed->lastObstacles());
+            }
+        }
+        check(patterns.size() > 1, "the Obstacle factory seeds each game, so obstacles differ between games");
     }
     check(launchable == catalogue::playableCount(), "every playable game has a launch path and vice versa");
     check(launchable >= dedicatedScenes.size(), "at least the two dedicated games can start");

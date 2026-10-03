@@ -188,6 +188,10 @@ void BoardGameScene::update(sf::Time deltaTime)
     }
     resultOverlay_.update(deltaTime);
     rulesOverlay_.update(deltaTime);
+    if (noticeLeft_ > 0.f) {
+        noticeLeft_ = std::max(0.f, noticeLeft_ - seconds);
+        if (noticeLeft_ == 0.f) notice_.clear();
+    }
     if (!ready()) return;
     startComputerIfNeeded();
     pollComputer(seconds);
@@ -217,7 +221,7 @@ void BoardGameScene::render(sf::RenderWindow& window) const
 
     sf::Color statusColor = Theme::textPrimary;
     if (!errorMessage_.empty()) statusColor = Theme::danger;
-    else if (host_.session.isComputerTurn()) statusColor = Theme::warning;
+    else if (!notice_.empty() || host_.session.isComputerTurn()) statusColor = Theme::warning;
     drawCenteredLine(window, statusText(), 626.f, Theme::bodySize, statusColor, true);
     const std::string help = game.outcome().finished()
         ? "Tab: buttons  |  F1: rules"
@@ -237,6 +241,8 @@ void BoardGameScene::onActivate()
     computer_.cancel();
     computerStuck_ = false;
     errorMessage_.clear();
+    notice_.clear();
+    noticeLeft_ = 0.f;
     computerElapsed_ = 0.f;
     exitConfirmation_ = false;
     exitYesSelected_ = false;
@@ -261,6 +267,14 @@ void BoardGameScene::applyResponse(const board_view::Response& response)
     if (response.feedback == Feedback::Focus) context_.play(SoundId::UiFocus);
     else if (response.feedback == Feedback::Select) context_.play(SoundId::UiConfirm);
     else if (response.feedback == Feedback::Invalid) context_.play(SoundId::UiError);
+    if (!response.message.empty()) {
+        notice_ = response.message;
+        noticeLeft_ = 2.5f;
+    } else if (response.feedback == Feedback::Select) {
+        // The player acted on the explanation (for example by choosing a letter): show the hint again.
+        notice_.clear();
+        noticeLeft_ = 0.f;
+    }
     if (response.move && humanMayPlay()) applyMove(*response.move);
 }
 
@@ -273,6 +287,8 @@ void BoardGameScene::applyMove(turn_based::MoveId move)
         context_.play(SoundId::UiError);
         return;
     }
+    notice_.clear();
+    noticeLeft_ = 0.f;
     host_.view->movePlayed(game, move);
     context_.play(mover == Seat::First ? SoundId::MovePrimary : SoundId::MoveSecondary);
     const auto after = game.scores();
@@ -373,6 +389,8 @@ void BoardGameScene::restartGame()
     computer_.cancel();
     computerStuck_ = false;
     errorMessage_.clear();
+    notice_.clear();
+    noticeLeft_ = 0.f;
     computerElapsed_ = 0.f;
     host_.session.restart();
     matchRecorder_.restartBoardGame();
@@ -512,6 +530,7 @@ void BoardGameScene::updateButtonStates()
 std::string BoardGameScene::statusText() const
 {
     if (!errorMessage_.empty()) return errorMessage_;
+    if (!notice_.empty()) return notice_;
     const auto& game = host_.session.game();
     if (game.outcome().finished()) {
         return reviewingBoard_ ? "Final position  |  Enter, Escape, or a click shows the result again" : "";
