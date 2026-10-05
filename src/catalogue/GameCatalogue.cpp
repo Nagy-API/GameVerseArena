@@ -11,6 +11,7 @@
 #include "ObstacleGame.hpp"
 #include "PyramidGame.hpp"
 #include "SusGame.hpp"
+#include "UltimateGame.hpp"
 #include "WordGame.hpp"
 
 #include <algorithm>
@@ -187,7 +188,7 @@ std::vector<GameDescriptor> buildCatalogue()
         "Plays a random legal move, as the console game does.",
         "X", "O", 11, "Play Infinity XO", "Infinity_XO_Board")));
 
-    games.push_back(board(
+    games.push_back(playable<ultimate_xo::UltimateGame>(board(
         "ultimate_xo", "Ultimate XO", "9 boards", "Win small boards to claim the big board.",
         "The board holds nine small tic-tac-toe boards. Winning a small board claims that square of the big board; "
         "a full small board without a line becomes a tie square. After a move, the next player must play in the "
@@ -195,7 +196,7 @@ std::vector<GameDescriptor> buildCatalogue()
         "board. Three claimed squares in a line on the big board win. If every small board closes without such a "
         "line, the game is a draw.",
         "Alpha-beta minimax four moves deep with the console game's board evaluation.",
-        "X", "O", 12, "Play Ultimate XO", "UltimateTTT_Board"));
+        "X", "O", 12, "Play Ultimate XO", "UltimateTTT_Board")));
 
     games.push_back(playable<memory_xo::MemoryGame>(board(
         "memory_xo", "Memory XO", "3x3 hidden", "Every mark is hidden, so remember where they are.",

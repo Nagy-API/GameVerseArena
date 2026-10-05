@@ -177,6 +177,7 @@ add_library(GameVerseArenaBoardGames
     "src/games/infinity/InfinityGame.cpp"
     "src/games/memory/MemoryGame.cpp"
     "src/games/obstacle/ObstacleGame.cpp"
+    "src/games/ultimate/UltimateGame.cpp"
 )
 target_include_directories(GameVerseArenaBoardGames PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/common"
@@ -192,6 +193,7 @@ target_include_directories(GameVerseArenaBoardGames PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/infinity"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/memory"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/games/obstacle"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/games/ultimate"
 )
 target_compile_features(GameVerseArenaBoardGames PUBLIC cxx_std_17)
 target_link_libraries(GameVerseArenaBoardGames PUBLIC Threads::Threads)
@@ -246,6 +248,7 @@ target_compile_definitions(GameVerseArenaWordGameTests PRIVATE
 gva_board_game_test(InfinityGameTests)
 gva_board_game_test(MemoryGameTests)
 gva_board_game_test(ObstacleGameTests)
+gva_board_game_test(UltimateGameTests)
 
 add_executable(GameVerseArenaTests
     "tests/TicTacToeTests.cpp"
@@ -382,6 +385,7 @@ add_executable(GameVerseArenaGUI
     "src/gui/board/InfinityBoardView.cpp"
     "src/gui/board/MemoryBoardView.cpp"
     "src/gui/board/ObstacleBoardView.cpp"
+    "src/gui/board/UltimateBoardView.cpp"
     "src/gui/ProfilesScene.cpp"
     "src/gui/ProfileStatsScene.cpp"
     "src/gui/ProfileAchievementsScene.cpp"

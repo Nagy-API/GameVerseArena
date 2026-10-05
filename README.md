@@ -5,7 +5,7 @@ GameVerseArena is a C++17 games platform with two independently buildable applic
 - `GameVerseArena`, the existing console collection of 14 turn-based board games, including shared player setup, Human/Computer selection, result detection, and an in-memory scoreboard.
 - `GameVerseArenaGUI`, an SFML 3.1.0 graphical application with a launcher, local player profiles, persistent match history, derived statistics and achievements, persistent audio and accessibility settings, procedural sound effects, a game library, graphical versions of the original board games (Classic Tic-Tac-Toe plus the games listed under [Board games in the GUI](#board-games-in-the-gui)), and real-time Ping Pong.
 
-Classic Tic-Tac-Toe, Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, Four-in-a-Row, 4x4 Tic-Tac-Toe, Word Tic-Tac-Toe, Pyramid Tic-Tac-Toe, Diamond, Infinity XO, Memory XO, Obstacle Tic-Tac-Toe, and Ping Pong are playable in the GUI. Ultimate XO remains playable in the console application only. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
+All 14 original board games and Ping Pong are playable in the GUI, and the console application still offers the 14 board games. Ping Pong is a separate GUI arcade game, so the original console collection remains 14 board games rather than becoming a 15-game board collection.
 
 ## Games
 
@@ -69,6 +69,7 @@ cmake --build build --config Release --target GameVerseArenaWordGameTests
 cmake --build build --config Release --target GameVerseArenaInfinityGameTests
 cmake --build build --config Release --target GameVerseArenaMemoryGameTests
 cmake --build build --config Release --target GameVerseArenaObstacleGameTests
+cmake --build build --config Release --target GameVerseArenaUltimateGameTests
 ctest --test-dir build --output-on-failure
 ```
 
@@ -208,7 +209,7 @@ Reduced Motion turns off decorative motion: button hover/focus easing, the achie
 
 ## Game library
 
-Choose **Play** to open the game library. It lists every game in one searchable, scrollable grid: the 14 original board games in console-menu order, then Ping Pong. Each card shows the game's name, category (BOARD or ARCADE), a one-line description, its board, the player modes, and whether it is **PLAYABLE** in the graphical app or, for board games whose graphical version is not available yet, **CONSOLE ONLY**. Choosing a console-only game explains that it is playable in the console application instead of opening an empty screen.
+Choose **Play** to open the game library. It lists every game in one searchable, scrollable grid: the 14 original board games in console-menu order, then Ping Pong. Each card shows the game's name, category (BOARD or ARCADE), a one-line description, its board, the player modes, and a **PLAYABLE** badge: every game in the library has a graphical version.
 
 - Type anywhere to search by name; Backspace edits, and Escape clears the search before leaving the library.
 - **All**, **Board**, and **Arcade** filter the grid; with the filters focused, Left/Right switches between them.
@@ -233,14 +234,14 @@ The active profile provides Player 1's initial setup name. Match-specific displa
 
 ## Board games in the GUI
 
-Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, Four-in-a-Row, 4x4 Tic-Tac-Toe, Word Tic-Tac-Toe, Pyramid Tic-Tac-Toe, Diamond, Infinity XO, Memory XO, and Obstacle Tic-Tac-Toe are played in shared board-game scenes. Choose one in the library to open its setup:
+Numerical Tic-Tac-Toe, SUS, 5x5 Tic-Tac-Toe, Misere Tic-Tac-Toe, Four-in-a-Row, 4x4 Tic-Tac-Toe, Word Tic-Tac-Toe, Pyramid Tic-Tac-Toe, Diamond, Infinity XO, Ultimate XO, Memory XO, and Obstacle Tic-Tac-Toe are played in shared board-game scenes. Choose one in the library to open its setup:
 
 - **Game mode**: Human vs Human or Human vs Computer.
 - **Player names**: Player 1 starts as the active profile's name; both names can be edited for this game only.
 - **Your side** (against the computer): play the side that moves first or the side that moves second. In Human vs Human play, Player 1 always takes the side that moves first.
 - The right-hand panel shows the game's rules and describes its computer opponent.
 
-During a game, the side panels show each player's side, name, points (SUS and 5x5), and whose turn it is, and the line under the board says what to do next. Move the cell cursor with the arrow keys and play with Enter or Space, or click a cell. In Numerical Tic-Tac-Toe, choose a number with the number keys or the tray under the board (the lowest unused number is preselected each turn) and then place it. In Four-in-a-Row, Left and Right choose a column (the preview shows where the disc will land) and a click anywhere in a column drops a disc there. In 4x4 Tic-Tac-Toe, first pick one of your tokens (its possible destinations are marked), then pick the empty cell to slide it to; picking another of your tokens switches, and Escape drops the pick. In Word Tic-Tac-Toe, choose a letter with the letter keys or the A-Z tray, then write it into a cell; the rules panel lists the valid words. In Infinity XO, the mark that the next move will remove is dimmed. In Memory XO, each new mark shows for a moment and then disappears; choosing a taken cell is refused with a short message, and the board is revealed when the game ends. In Obstacle Tic-Tac-Toe, obstacles are hatched blocks that appear after every second move. Two refused choices explain themselves with a short message under the board (a Word cell chosen before a letter, and a taken Memory cell); other refused choices just play the error sound. Tab moves the focus to **Restart Game**, **Rules**, and **Back to Library**; F1 opens the rules. Escape or **Back to Library** asks for confirmation before discarding a game in progress. The computer searches on a background thread, so the window stays responsive, and it waits at least 0.35 seconds before moving.
+During a game, the side panels show each player's side, name, points (SUS and 5x5), and whose turn it is, and the line under the board says what to do next. Move the cell cursor with the arrow keys and play with Enter or Space, or click a cell. In Numerical Tic-Tac-Toe, choose a number with the number keys or the tray under the board (the lowest unused number is preselected each turn) and then place it. In Four-in-a-Row, Left and Right choose a column (the preview shows where the disc will land) and a click anywhere in a column drops a disc there. In 4x4 Tic-Tac-Toe, first pick one of your tokens (its possible destinations are marked), then pick the empty cell to slide it to; picking another of your tokens switches, and Escape drops the pick. In Word Tic-Tac-Toe, choose a letter with the letter keys or the A-Z tray, then write it into a cell; the rules panel lists the valid words. In Infinity XO, the mark that the next move will remove is dimmed. In Memory XO, each new mark shows for a moment and then disappears; choosing a taken cell is refused with a short message, and the board is revealed when the game ends. In Obstacle Tic-Tac-Toe, obstacles are hatched blocks that appear after every second move. In Ultimate XO, the small board you must use is outlined (any open board is outlined when the choice is free) and the keyboard cursor moves into it, won boards carry a large mark, and tied boards are dimmed. Some refused choices explain themselves with a short message under the board (a Word cell chosen before a letter, a taken Memory cell, or an Ultimate XO cell outside the board in play); other refused choices just play the error sound. Tab moves the focus to **Restart Game**, **Rules**, and **Back to Library**; F1 opens the rules. Escape or **Back to Library** asks for confirmation before discarding a game in progress. The computer searches on a background thread, so the window stays responsive, and it waits at least 0.35 seconds before moving.
 
 When a game ends, the result panel names the winner and the reason and shows the final points where the game has them. **Rematch** starts the next game with the same players, **View Final Board** (or Escape) hides the panel so the finished board can be studied, **New Setup** returns to the setup, and **Return to Library** leaves. Restarting a game in progress discards it without recording it.
 

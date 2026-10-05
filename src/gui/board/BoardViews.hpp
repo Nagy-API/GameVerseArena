@@ -23,5 +23,6 @@ std::unique_ptr<BoardView> makeWordView();
 std::unique_ptr<BoardView> makeInfinityView();
 std::unique_ptr<BoardView> makeMemoryView();
 std::unique_ptr<BoardView> makeObstacleView();
+std::unique_ptr<BoardView> makeUltimateView();
 
 } // namespace board_view

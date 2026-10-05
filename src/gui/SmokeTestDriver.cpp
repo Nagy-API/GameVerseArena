@@ -12,6 +12,7 @@
 #include "MemoryGame.hpp"
 #include "NumericalGame.hpp"
 #include "ObstacleGame.hpp"
+#include "UltimateGame.hpp"
 #include "WordGame.hpp"
 #include "PingPongGameScene.hpp"
 
@@ -387,13 +388,17 @@ void SmokeTestDriver::scenarioLibrary()
     frames(2);
     expect(library->firstVisibleRow() == 0, "the grid scrolls back to the top");
 
-    // A board game that is not migrated yet must not start a scene and must explain why.
+    // Every game now has a graphical version. From the search, Enter moves to the results and a
+    // second Enter opens the focused game.
+    expect(catalogue::playableCount() == catalogue::all().size(), "every game in the library is playable in the GUI");
     type("ultimate");
     key(sf::Keyboard::Key::Enter);
     key(sf::Keyboard::Key::Enter);
-    expectScene(SceneId::GameLibrary, "a console-only game does not open a scene");
-    expect(library->hasMessage(), "choosing a console-only game explains that it is console-only for now");
-    captureBoth("library_console_only");
+    expectScene(SceneId::BoardGameSetup, "Enter on a search result opens that game's setup");
+    expect(app_.boardGameHost_.game != nullptr && app_.boardGameHost_.game->key == "ultimate_xo",
+           "the setup is Ultimate XO's, the game that was searched for");
+    key(sf::Keyboard::Key::Escape);
+    expectScene(SceneId::GameLibrary, "Escape in the setup returns to the library");
     key(sf::Keyboard::Key::Escape);
 
     using Key = sf::Keyboard::Key;
@@ -904,7 +909,7 @@ void SmokeTestDriver::scenarioMoreBoardGames()
 
 void SmokeTestDriver::scenarioSpecialRuleBoardGames()
 {
-    log_ << "\n[Word, Infinity, Memory, and Obstacle]\n";
+    log_ << "\n[Word, Infinity, Memory, Obstacle, and Ultimate XO]\n";
     using persistence::GameKey;
     auto& host = app_.boardGameHost_;
     const auto active = app_.profileService_->activeProfile();
@@ -1010,6 +1015,35 @@ void SmokeTestDriver::scenarioSpecialRuleBoardGames()
         expect(row && row->game == GameKey::ObstacleTicTacToe && row->profileSideOrMark == std::optional<std::string>{"X"},
                "the Obstacle row stores the human's X side");
         finishAndReturn("Obstacle");
+    }
+
+    // Ultimate XO against the computer: play continues in the small board just used.
+    before = historyCount();
+    if (startBoardGame("ultimate", true, true)) {
+        using ultimate_xo::UltimateGame;
+        auto* scene = boardScene();
+        auto* view = dynamic_cast<board_view::CellBoardView*>(host.view.get());
+        const auto& board = dynamic_cast<const UltimateGame&>(host.session.game());
+        playBoardMove(UltimateGame::encode(4, 4), false);
+        expect(board.forcedBoard() == 4, "after a move in a small board, the next move must use that board");
+        waitForComputerMove();
+        int computerMarks = 0;
+        for (int cell = 0; cell < 9; ++cell) {
+            if (board.cell(4, cell) == ultimate_xo::Mark::O) ++computerMarks;
+        }
+        expect(board.movesPlayed() == 2 && computerMarks == 1, "the computer answers in the same small board");
+        expect(view != nullptr && board.isLegal(view->cursor()) && UltimateGame::boardOf(view->cursor()) == 4,
+               "the keyboard cursor moves to a free cell of the board in play");
+        if (view) click(view->cellCenter(UltimateGame::encode(0, 0)).value_or(sf::Vector2f{}));
+        expect(board.movesPlayed() == 2 && scene != nullptr && scene->notice() == "You must play in the outlined board.",
+               "a move outside the outlined board is refused with an explanation");
+        captureBoth("board_ultimate_in_progress");
+        expect(playBoardGameToEnd(false), "an Ultimate XO game against the computer can be played to the end");
+        expect(historyCount() == before + 1, "the finished Ultimate XO game is recorded once");
+        const auto row = latest();
+        expect(row && row->game == GameKey::UltimateXo && row->profileSideOrMark == std::optional<std::string>{"X"},
+               "the Ultimate XO row stores the human's X side");
+        finishAndReturn("Ultimate XO");
     }
     goToMainMenu();
 }
