@@ -9,6 +9,7 @@
 #include "TicTacToeSession.hpp"
 #include "PingPongSession.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -511,6 +512,106 @@ void testBoardGameRecorder(const std::filesystem::path& directory)
           "board-game statistics derive from the stored rows");
     check(statistics.overall(profile.id).matches == 4, "board games count toward overall statistics");
 }
+
+void testPerGameStatistics(const std::filesystem::path& directory)
+{
+    using persistence::GameKey;
+    using persistence::MatchResult;
+    persistence::Database database(directory / "per-game.db");
+    persistence::ProfileService profiles(database); profiles.bootstrap();
+    persistence::MatchService service(database);
+    persistence::StatisticsRepository statistics(database);
+    const auto owner = profiles.activeProfile().value();
+    const auto other = profiles.createProfile("Other");
+    const auto& keys = persistence::allGameKeys();
+
+    const auto empty = statistics.perGame(owner.id);
+    bool zeroRows = empty.size() == keys.size() && keys.size() == 15;
+    for (std::size_t index = 0; zeroRows && index < empty.size(); ++index) {
+        const auto& row = empty[index];
+        zeroRows = row.game == keys[index] && row.matches == 0 && row.wins == 0 && row.losses == 0 &&
+                   row.draws == 0 && row.winRate == 0.0 && row.totalDurationMs == 0 && !row.lastPlayedAt;
+    }
+    check(zeroRows, "a profile without matches has a zero row for each of the 15 games, in catalogue order");
+
+    service.recordCompleted(match(owner.id, GameKey::ClassicTicTacToe, MatchResult::Win, 100));
+    service.recordCompleted(boardMatch(owner.id, GameKey::UltimateXo, MatchResult::Win, 200));
+    auto asSecond = boardMatch(owner.id, GameKey::UltimateXo, MatchResult::Loss, 300);
+    std::swap(asSecond.profileSideOrMark, asSecond.opponentSideOrMark);
+    service.recordCompleted(asSecond);
+    // Stored last but completed second: completion order is win, win, loss (best streak 2, current 0),
+    // while insertion order would give win, loss, win (best 1, current 1).
+    service.recordCompleted(boardMatch(owner.id, GameKey::UltimateXo, MatchResult::Win, 250));
+    auto even = boardMatch(owner.id, GameKey::NumericalTicTacToe, MatchResult::Draw, 400);
+    std::swap(even.profileSideOrMark, even.opponentSideOrMark);
+    service.recordCompleted(even);
+    service.recordCompleted(boardMatch(owner.id, GameKey::Sus, MatchResult::Win, 500));
+    service.recordCompleted(boardMatch(other.id, GameKey::UltimateXo, MatchResult::Win, 600));
+
+    const auto rows = statistics.perGame(owner.id);
+    const auto rowFor = [&rows](GameKey game) {
+        const auto found = std::find_if(rows.begin(), rows.end(), [game](const auto& row) { return row.game == game; });
+        return found == rows.end() ? persistence::GameSummary{} : *found;
+    };
+    bool ordered = rows.size() == keys.size();
+    for (std::size_t index = 0; ordered && index < rows.size(); ++index) ordered = rows[index].game == keys[index];
+    check(ordered, "per-game rows keep catalogue order once games have been played");
+    const auto ultimate = rowFor(GameKey::UltimateXo);
+    check(ultimate.matches == 3 && ultimate.wins == 2 && ultimate.losses == 1 && ultimate.draws == 0 &&
+              std::abs(ultimate.winRate - 2.0 / 3.0) < 1e-9,
+          "a game's row counts only that game's results for the profile");
+    check(ultimate.totalDurationMs == 1500 && ultimate.lastPlayedAt == 300,
+          "play time sums the game's rows and last played is the latest completion, not the latest insert");
+    const auto classic = rowFor(GameKey::ClassicTicTacToe);
+    check(classic.matches == 1 && classic.wins == 1 && classic.totalDurationMs == 1100 && classic.lastPlayedAt == 100,
+          "Classic Tic-Tac-Toe has its own row");
+    check(rowFor(GameKey::NumericalTicTacToe).draws == 1 && rowFor(GameKey::Sus).wins == 1,
+          "every played game gets its own totals");
+    const auto pong = rowFor(GameKey::PingPong);
+    check(pong.matches == 0 && !pong.lastPlayedAt, "an unplayed game keeps a zero row between played ones");
+
+    std::int64_t matches = 0, wins = 0, losses = 0, draws = 0, duration = 0;
+    for (const auto& row : rows) {
+        matches += row.matches; wins += row.wins; losses += row.losses; draws += row.draws;
+        duration += row.totalDurationMs;
+    }
+    const auto overall = statistics.overall(owner.id);
+    check(matches == overall.matches && wins == overall.wins && losses == overall.losses && draws == overall.draws &&
+              duration == overall.totalDurationMs && matches == 6,
+          "the per-game rows add up to the overall totals");
+    check(statistics.perGame(other.id)[11].matches == 1 && statistics.perGame(other.id)[11].game == GameKey::UltimateXo,
+          "another profile's matches stay in its own rows");
+
+    const auto ultimateDetail = statistics.forGame(owner.id, GameKey::UltimateXo);
+    check(ultimateDetail.firstSideMatches == 2 && ultimateDetail.secondSideMatches == 1,
+          "board-game side counts separate the side that moves first (X) from the second (O)");
+    check(ultimateDetail.currentWinStreak == 0 && ultimateDetail.bestWinStreak == 2,
+          "a game's streaks follow completion order, not insertion order");
+    const auto numerical = statistics.forGame(owner.id, GameKey::NumericalTicTacToe);
+    check(numerical.firstSideMatches == 0 && numerical.secondSideMatches == 1,
+          "Numerical side counts use its Odd and Even sides");
+    const auto classicDetail = statistics.forGame(owner.id, GameKey::ClassicTicTacToe);
+    check(classicDetail.ticTacToeAsX == 1 && classicDetail.firstSideMatches == 0 && classicDetail.secondSideMatches == 0,
+          "Classic Tic-Tac-Toe keeps its X / O counts and has no shared board-game sides");
+
+    // The labels the statistics card special-cases, points, and Ping Pong's lack of shared sides.
+    auto secondWord = boardMatch(owner.id, GameKey::WordTicTacToe, MatchResult::Win, 700);
+    std::swap(secondWord.profileSideOrMark, secondWord.opponentSideOrMark);
+    service.recordCompleted(secondWord);
+    auto susAsU = boardMatch(owner.id, GameKey::Sus, MatchResult::Loss, 710);
+    std::swap(susAsU.profileSideOrMark, susAsU.opponentSideOrMark);
+    service.recordCompleted(susAsU);
+    service.recordCompleted(match(owner.id, GameKey::PingPong, MatchResult::Win, 720));
+    const auto word = statistics.forGame(owner.id, GameKey::WordTicTacToe);
+    check(word.firstSideMatches == 0 && word.secondSideMatches == 1, "Word side counts use its First and Second sides");
+    const auto sus = statistics.forGame(owner.id, GameKey::Sus);
+    check(sus.firstSideMatches == 1 && sus.secondSideMatches == 1, "SUS side counts use its S and U sides");
+    check(sus.pointsScored == 4 && sus.pointsConceded == 4 && sus.bestFinalMargin == 2,
+          "SUS points and the best final margin come from the stored scores (3-1 and 1-3)");
+    const auto pongDetail = statistics.forGame(owner.id, GameKey::PingPong);
+    check(pongDetail.matches == 1 && pongDetail.firstSideMatches == 0 && pongDetail.secondSideMatches == 0,
+          "Ping Pong has no shared board-game sides");
+}
 } // namespace
 
 int main()
@@ -522,6 +623,7 @@ int main()
     testRecorder(temporary.path);
     testBoardGameValidation(temporary.path);
     testBoardGameRecorder(temporary.path);
+    testPerGameStatistics(temporary.path);
     if (failures == 0) { std::cout << "Match history tests passed: " << checks << " checks\n"; return 0; }
     std::cerr << failures << " of " << checks << " match-history checks failed\n";
     return 1;

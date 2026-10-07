@@ -55,6 +55,7 @@ private:
     void scenarioBoardGames();
     void scenarioMoreBoardGames();
     void scenarioSpecialRuleBoardGames();
+    void scenarioStatistics();
 
     // Shared board games: open one from the library search, choose the mode and side, and start.
     bool startBoardGame(const std::string& search, bool againstComputer, bool humanFirst,

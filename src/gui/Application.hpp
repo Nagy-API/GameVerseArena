@@ -74,6 +74,8 @@ private:
     std::unique_ptr<persistence::AchievementService> achievementService_;
     achievements::AchievementNotificationQueue achievementNotifications_;
     std::int64_t selectedStatsProfileId_{};
+    // The game selected in Statistics and filtered in Match History (nullopt: all games).
+    std::optional<persistence::GameKey> selectedStatsGame_;
     std::unique_ptr<AppContext> context_;
     std::unique_ptr<GameLauncher> launcher_;
     // Declared after everything the scenes reference so the scenes are destroyed first.

@@ -42,15 +42,55 @@ GameStatistics StatisticsRepository::forGame(std::int64_t profileId, GameKey gam
         "COALESCE(SUM(profile_score),0),COALESCE(SUM(opponent_score),0),"
         "COALESCE(MAX(profile_score-opponent_score),0),COALESCE(SUM(profile_side_or_mark='X'),0),"
         "COALESCE(SUM(profile_side_or_mark='O'),0),COALESCE(SUM(match_format='single'),0),"
-        "COALESCE(SUM(match_format='best_of_3'),0),COALESCE(SUM(match_format='best_of_5'),0) "
+        "COALESCE(SUM(match_format='best_of_3'),0),COALESCE(SUM(match_format='best_of_5'),0),"
+        "COALESCE(SUM(profile_side_or_mark=?3),0),COALESCE(SUM(profile_side_or_mark=?4),0) "
         "FROM matches WHERE profile_id=?1 AND game_key=?2;");
-    statement.bind(1,profileId); statement.bind(2,toStorage(game)); GameStatistics stats;
+    // Games without shared board-game sides bind empty labels, which no stored row uses.
+    const auto sides = boardGameSides(game);
+    statement.bind(1,profileId); statement.bind(2,toStorage(game));
+    statement.bind(3,std::string(sides ? sides->first : "")); statement.bind(4,std::string(sides ? sides->second : ""));
+    GameStatistics stats;
     if(statement.step()) { stats.matches=statement.integer(0); stats.wins=statement.integer(1); stats.losses=statement.integer(2);
         stats.draws=statement.integer(3); stats.totalDurationMs=statement.integer(4); if(!statement.isNull(5)) stats.lastPlayedAt=statement.integer(5);
         stats.pointsScored=statement.integer(6); stats.pointsConceded=statement.integer(7); stats.bestFinalMargin=statement.integer(8);
         stats.ticTacToeAsX=statement.integer(9); stats.ticTacToeAsO=statement.integer(10); stats.singleMatches=statement.integer(11);
-        stats.bestOfThreeMatches=statement.integer(12); stats.bestOfFiveMatches=statement.integer(13); }
+        stats.bestOfThreeMatches=statement.integer(12); stats.bestOfFiveMatches=statement.integer(13);
+        stats.firstSideMatches=statement.integer(14); stats.secondSideMatches=statement.integer(15); }
     applyStreaks(database_,profileId,toStorage(game),stats); finish(stats); return stats;
+}
+
+std::vector<GameSummary> StatisticsRepository::perGame(std::int64_t profileId) const
+{
+    std::map<GameKey, GameSummary> found;
+    auto statement = database_.prepare(
+        "SELECT game_key,COUNT(*),COALESCE(SUM(result='win'),0),COALESCE(SUM(result='loss'),0),"
+        "COALESCE(SUM(result='draw'),0),COALESCE(SUM(duration_ms),0),MAX(completed_at) "
+        "FROM matches WHERE profile_id=?1 GROUP BY game_key;");
+    statement.bind(1, profileId);
+    while (statement.step()) {
+        GameSummary summary;
+        summary.game = gameKeyFromStorage(statement.text(0));
+        summary.matches = statement.integer(1);
+        summary.wins = statement.integer(2);
+        summary.losses = statement.integer(3);
+        summary.draws = statement.integer(4);
+        summary.totalDurationMs = statement.integer(5);
+        if (!statement.isNull(6)) summary.lastPlayedAt = statement.integer(6);
+        summary.winRate = summary.matches == 0 ? 0.0 : static_cast<double>(summary.wins) / static_cast<double>(summary.matches);
+        found[summary.game] = summary;
+    }
+    std::vector<GameSummary> result;
+    for (const auto game : allGameKeys()) {
+        const auto entry = found.find(game);
+        if (entry != found.end()) {
+            result.push_back(entry->second);
+        } else {
+            GameSummary empty;
+            empty.game = game;
+            result.push_back(empty);
+        }
+    }
+    return result;
 }
 
 achievements::AchievementSnapshot StatisticsRepository::achievementSnapshot(std::int64_t profileId) const

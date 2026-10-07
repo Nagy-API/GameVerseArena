@@ -9,9 +9,11 @@
 #include "FourByFourGame.hpp"
 #include "GameLibraryScene.hpp"
 #include "InfinityGame.hpp"
+#include "MatchHistoryScene.hpp"
 #include "MemoryGame.hpp"
 #include "NumericalGame.hpp"
 #include "ObstacleGame.hpp"
+#include "ProfileStatsScene.hpp"
 #include "UltimateGame.hpp"
 #include "WordGame.hpp"
 #include "PingPongGameScene.hpp"
@@ -66,6 +68,7 @@ int SmokeTestDriver::run()
     scenarioBoardGames();
     scenarioMoreBoardGames();
     scenarioSpecialRuleBoardGames();
+    scenarioStatistics();
 
     expect(app_.audio_->voiceCount() == AudioEngine::voiceLimit, "the voice pool never grew while sounds played");
     log_ << "\nChecks: " << checks_ << "  Failures: " << failures_ << "  Captures: " << captures_ << '\n';
@@ -1046,4 +1049,120 @@ void SmokeTestDriver::scenarioSpecialRuleBoardGames()
         finishAndReturn("Ultimate XO");
     }
     goToMainMenu();
+}
+
+// ---------------------------------------------------------------------------------------
+// Statistics and match history for the whole catalogue
+// ---------------------------------------------------------------------------------------
+
+void SmokeTestDriver::scenarioStatistics()
+{
+    log_ << "\n[Statistics and match history]\n";
+    goToMainMenu();
+    click(mainMenuButton(1));
+    if (!expectScene(SceneId::Profiles, "Profiles opens from the main menu")) return;
+    // Every game above was recorded for the active profile; select it before View Stats.
+    const auto active = app_.profileService_->activeProfile();
+    if (!expect(active.has_value(), "a profile is active")) return;
+    const auto profiles = app_.profileService_->listProfiles();
+    const auto position = std::find_if(profiles.begin(), profiles.end(),
+        [&active](const persistence::Profile& profile) { return profile.id == active->id; }) - profiles.begin();
+    for (std::ptrdiff_t step = 0; step < position; ++step) key(sf::Keyboard::Key::Down);
+    click({890.f + 159.f, 160.f + 4.f * 68.f + 28.f});  // View Stats
+    if (!expectScene(SceneId::ProfileStats, "View Stats opens the statistics")) return;
+    auto* stats = dynamic_cast<ProfileStatsScene*>(&app_.scenes_.active());
+    if (!expect(stats != nullptr, "the active scene is the statistics scene")) return;
+    if (!expect(stats->profileId() == active->id, "the statistics show the active profile")) return;
+    if (!expect(stats->rowCount() == 16 && !stats->rowGame(0),
+                "the table has an All games row and one row for each of the 15 games")) return;
+    expect(stats->rowGame(1) == persistence::GameKey::ClassicTicTacToe &&
+               stats->rowGame(12) == persistence::GameKey::UltimateXo &&
+               stats->rowGame(15) == persistence::GameKey::PingPong,
+           "the rows follow the library order");
+    bool counted = stats->rowMatches(0) == historyCount();
+    std::int64_t gamesWithMatches = 0;
+    for (std::size_t row = 1; counted && row < stats->rowCount(); ++row) {
+        persistence::MatchFilter filter;
+        filter.game = stats->rowGame(row);
+        counted = filter.game.has_value() && stats->rowMatches(row) == app_.matchRepository_->count(active->id, filter);
+        if (stats->rowMatches(row) > 0) ++gamesWithMatches;
+    }
+    expect(counted, "every row's match count equals the profile's stored history for that game");
+    expect(gamesWithMatches == 14 && stats->rowMatches(15) == 0,
+           "the 14 board games finished in this smoke test have matches; the abandoned Ping Pong match has none");
+    expect(stats->selectedRow() == 0 && stats->firstVisibleRow() == 0, "the table starts at the All games row");
+    captureBoth("statistics");
+
+    for (int step = 0; step < 12; ++step) key(sf::Keyboard::Key::Down);
+    expect(stats->selectedRow() == 12 && stats->firstVisibleRow() == 3,
+           "Down selects Ultimate XO and scrolls the table to keep it visible");
+    expect(stats->detailText().find("Matches  1") != std::string::npos &&
+               stats->detailText().find("As X / O  1 / 0") != std::string::npos,
+           "the Ultimate XO card shows its match and the side the profile played");
+    captureBoth("statistics_ultimate");
+
+    sf::Event::MouseWheelScrolled wheel{};
+    wheel.delta = 1.f;
+    wheel.position = app_.window_.mapCoordsToPixel({400.f, 300.f});
+    for (int step = 0; step < 5; ++step) app_.dispatch(sf::Event(wheel));
+    frames(1);
+    expect(stats->firstVisibleRow() == 0 && stats->selectedRow() == 12,
+           "the mouse wheel scrolls the table without changing the selection");
+    click({300.f, 180.f + 2.f * 38.f + 17.f});
+    expect(stats->selectedRow() == 2, "clicking a row selects its game");
+    key(sf::Keyboard::Key::End);
+    expect(stats->selectedRow() == 15 && stats->firstVisibleRow() == 6, "End selects the last game, Ping Pong");
+    key(sf::Keyboard::Key::Home);
+    expect(stats->selectedRow() == 0 && stats->firstVisibleRow() == 0, "Home returns to All games");
+    wheel.delta = -1.f;
+    for (int step = 0; step < 10; ++step) app_.dispatch(sf::Event(wheel));
+    frames(1);
+    expect(stats->firstVisibleRow() == 6 && stats->selectedRow() == 0, "the wheel can scroll the selection out of view");
+    key(sf::Keyboard::Key::Up);
+    expect(stats->firstVisibleRow() == 0 && stats->selectedRow() == 0,
+           "Up on the first row brings the selection back into view");
+    for (int step = 0; step < 10; ++step) app_.dispatch(sf::Event(wheel));
+    frames(1);
+    click({300.f, 180.f + 1.f * 38.f + 17.f});  // the second visible row of the scrolled table
+    expect(stats->selectedRow() == 7, "clicking a row of the scrolled table selects that row");
+    key(sf::Keyboard::Key::Home);
+    for (int step = 0; step < 12; ++step) key(sf::Keyboard::Key::Down);
+
+    click({746.f + 110.f, 635.f + 27.f});  // Recent Matches
+    if (!expectScene(SceneId::MatchHistory, "Recent Matches opens the match history")) return;
+    auto* history = dynamic_cast<MatchHistoryScene*>(&app_.scenes_.active());
+    if (!expect(history != nullptr, "the active scene is the match history")) return;
+    persistence::MatchFilter ultimate;
+    ultimate.game = persistence::GameKey::UltimateXo;
+    expect(history->gameFilter() == ultimate.game &&
+               history->total() == app_.matchRepository_->count(active->id, ultimate) && history->total() >= 1,
+           "the history opens filtered to the game selected in Statistics");
+    captureBoth("history_ultimate");
+    click({72.f + 145.f, 135.f + 24.f});  // the game filter
+    expect(history->gameFilter() == persistence::GameKey::MemoryXo, "clicking the game filter moves to the next game");
+    key(sf::Keyboard::Key::Up);
+    expect(history->gameFilter() == persistence::GameKey::UltimateXo, "Up moves the focused game filter back");
+    for (int step = 0; step < 4; ++step) key(sf::Keyboard::Key::Down);
+    expect(!history->gameFilter() && history->total() == historyCount(),
+           "the game filter steps through the last games and back to All");
+    {
+        const auto pixel = app_.window_.mapCoordsToPixel({72.f + 145.f, 135.f + 24.f});
+        sf::Event::MouseButtonPressed pressed{};
+        pressed.button = sf::Mouse::Button::Right;
+        pressed.position = pixel;
+        app_.dispatch(sf::Event(pressed));
+        sf::Event::MouseButtonReleased released{};
+        released.button = sf::Mouse::Button::Right;
+        released.position = pixel;
+        app_.dispatch(sf::Event(released));
+        frames(1);
+    }
+    expect(history->gameFilter() == persistence::GameKey::PingPong, "a right-click steps the game filter back from All");
+    key(sf::Keyboard::Key::Escape);
+    expectScene(SceneId::ProfileStats, "Escape returns from the history to the statistics");
+    expect(stats->selectedRow() == 15, "the statistics follow the game chosen in the history");
+    key(sf::Keyboard::Key::Escape);
+    expectScene(SceneId::Profiles, "Escape returns from the statistics to Profiles");
+    key(sf::Keyboard::Key::Escape);
+    expectScene(SceneId::MainMenu, "Escape returns to the main menu");
 }

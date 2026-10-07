@@ -12,9 +12,9 @@
 
 - `MainMenuScene`: Play, Profiles, Settings, About, and Exit navigation with keyboard and mouse input.
 - `ProfilesScene`: bounded/scrollable local profile selection plus Create, Rename, Delete, Set Active, View Stats, and Back actions. `ProfileEditOverlay` and `ProfileDeleteOverlay` own transient input and confirmation presentation; all validation and state transitions remain in `ProfileService`.
-- `ProfileStatsScene`: read-only overall and per-game statistics for the selected profile, including the zero-history empty state, achievement summary, and navigation to history or achievements.
+- `ProfileStatsScene`: read-only statistics for the selected profile: a scrollable table with an All games row and one row per game (`StatisticsRepository::perGame`, one grouped query), a detail card for the selected row (`overall`/`forGame`), the zero-history empty state, the achievement summary, and navigation to history or achievements.
 - `ProfileAchievementsScene`: profile-scoped achievement cards, All/General/Tic-Tac-Toe/Ping Pong filters, bounded scrolling, first-unlock dates, and history-derived locked progress.
-- `MatchHistoryScene`: newest-first bounded pages with repository-level game/result filters and Previous/Next navigation.
+- `MatchHistoryScene`: newest-first bounded pages with repository-level game filters (All or any of the 15 games) and result filters and Previous/Next navigation. The Application owns the selected statistics game (`std::optional<GameKey>`) shared by both scenes, so Recent Matches opens filtered to the selected game and the statistics follow the history's game filter.
 - `GameLibraryScene`: a searchable, filterable (All / Board / Arcade), bounded-scrolling three-column grid of every entry in the game catalogue, with keyboard focus zones (search, filters, grid, Back) and mouse hover, click, and wheel support. Every catalogue entry is playable; a game without a graphical version would be labelled CONSOLE ONLY and explain itself instead of opening a scene.
 - `TicTacToeSetupScene`: keyboard- and mouse-accessible mode, name, mark, AI, and match-length configuration.
 - `TicTacToeGameScene`: event-driven board input, score display, mark animation, non-blocking AI turns, and safe navigation.
@@ -57,7 +57,7 @@ The schema is tracked with `PRAGMA user_version` and is currently version 4. Ver
 
 - `MatchRepository` owns prepared insertion, newest-first pagination, counts, and SQL game/result filters.
 - `MatchService` validates terminal records and profile existence before insertion.
-- `StatisticsRepository` derives overall and per-game aggregates and streaks from history. There are no persistent aggregate counters.
+- `StatisticsRepository` derives overall and per-game aggregates and streaks from history. `perGame` returns one summary per game in `allGameKeys()` order (zero rows for unplayed games) from a single `GROUP BY game_key` query; `forGame` adds each game's own figures, including the matches played on each shared board-game side. There are no persistent aggregate counters.
 - `StatisticsRepository` also supplies a compact achievement snapshot: total matches/wins, best streak, per-game wins, Tic-Tac-Toe wins by X/O, and Ping Pong 5-0/5-4 win existence. Startup backfill uses one aggregate query plus one ordered all-profile streak scan rather than a full-history scan per achievement or profile.
 - `AchievementRepository` owns all unlock SQL. `INSERT OR IGNORE` and the composite primary key preserve the first timestamp and provide duplicate protection.
 - `AchievementService` coordinates snapshot evaluation, status/progress views, post-match recognition, and startup backfill. It returns only newly inserted catalogue items for toast presentation.

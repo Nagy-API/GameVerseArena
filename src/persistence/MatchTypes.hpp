@@ -70,6 +70,18 @@ struct OverallStatistics {
     std::int64_t bestWinStreak{};
 };
 
+// One game's totals for a profile (a row of the statistics table).
+struct GameSummary {
+    GameKey game{GameKey::ClassicTicTacToe};
+    std::int64_t matches{};
+    std::int64_t wins{};
+    std::int64_t losses{};
+    std::int64_t draws{};
+    double winRate{};
+    std::int64_t totalDurationMs{};
+    std::optional<std::int64_t> lastPlayedAt;
+};
+
 struct GameStatistics : OverallStatistics {
     std::int64_t pointsScored{};
     std::int64_t pointsConceded{};
@@ -79,6 +91,10 @@ struct GameStatistics : OverallStatistics {
     std::int64_t singleMatches{};
     std::int64_t bestOfThreeMatches{};
     std::int64_t bestOfFiveMatches{};
+    // Shared board games only (see boardGameSides): matches played on the side that moves first
+    // and on the side that moves second. Zero for Classic Tic-Tac-Toe and Ping Pong.
+    std::int64_t firstSideMatches{};
+    std::int64_t secondSideMatches{};
 };
 
 // Stored side labels for the board games played as a single game in the shared board-game

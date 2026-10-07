@@ -187,11 +187,12 @@ bool Application::initialize()
     scenes_.add(SceneId::MainMenu, std::make_unique<MainMenuScene>(context));
     scenes_.add(SceneId::Profiles, std::make_unique<ProfilesScene>(context, *profileService_, selectedStatsProfileId_));
     scenes_.add(SceneId::ProfileStats, std::make_unique<ProfileStatsScene>(
-        context, *profileService_, *statisticsRepository_, *achievementService_, selectedStatsProfileId_));
+        context, *profileService_, *statisticsRepository_, *achievementService_, selectedStatsProfileId_,
+        selectedStatsGame_));
     scenes_.add(SceneId::ProfileAchievements, std::make_unique<ProfileAchievementsScene>(
         context, *profileService_, *achievementService_, selectedStatsProfileId_));
     scenes_.add(SceneId::MatchHistory, std::make_unique<MatchHistoryScene>(
-        context, *profileService_, *matchRepository_, selectedStatsProfileId_));
+        context, *profileService_, *matchRepository_, selectedStatsProfileId_, selectedStatsGame_));
     launcher_ = std::make_unique<GameLauncher>(scenes_);
     launcher_->bindDedicatedScene("classic_tic_tac_toe", SceneId::TicTacToeSetup);
     launcher_->bindDedicatedScene("ping_pong", SceneId::PingPongSetup);
